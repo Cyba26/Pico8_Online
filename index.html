@@ -257,7 +257,7 @@ body{
 // ============================================================
 const SUPABASE_URL = 'https://lniliwvcdshrenxtxtzh.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_hHGxFFQrbORNGs-e5SVlPg_VyLnpRs4';
-const ADMIN_PASSWORD = 'T8j&^NpB@KvXd3FBsP';
+const ADMIN_HASH = 'ece19f90567f7a59b2f174763de6d7bf5a6810a8f3ce016bea6e7a5c23cbdbf3';
 const RUNTIME_PATH = 'runtime/pico8.dat';
 
 // Games that have leaderboards (match by cartridge name)
@@ -380,6 +380,11 @@ async function fetchLeaderboard(gameName) {
   return data || [];
 }
 
+async function deleteScore(id) {
+  const { error } = await sb.from('leaderboard').delete().eq('id', id);
+  if (error) throw new Error('Delete failed: ' + error.message);
+}
+
 async function submitScore(gameName, playerName, score, difficulty) {
   const diffNames = { 1: 'Easy', 2: 'Hard', 3: 'Nightmare' };
   const diffStr = diffNames[difficulty] || 'Easy';
@@ -422,7 +427,7 @@ function hasLeaderboard(cartName) {
 function showAdminModal(){$('modal-overlay').classList.add('on');$('modal-pw').value='';$('modal-error').style.display='none';setTimeout(()=>$('modal-pw').focus(),100)}
 function hideAdminModal(){$('modal-overlay').classList.remove('on')}
 function toggleAdmin(){if(isAdmin){isAdmin=false;$('admin-toggle').classList.remove('active');$('admin-toggle').innerHTML='&#x1F512; Admin';$('admin-zone').classList.remove('on');renderCarts();toast('Admin mode off')}else{showAdminModal()}}
-function tryLogin(){if($('modal-pw').value===ADMIN_PASSWORD){isAdmin=true;hideAdminModal();$('admin-toggle').classList.add('active');$('admin-toggle').innerHTML='&#x1F513; Admin';$('admin-zone').classList.add('on');updateRTStatus();renderCarts();toast('Admin mode on')}else{$('modal-error').style.display='block';$('modal-pw').value='';$('modal-pw').focus()}}
+async function tryLogin(){const hashBuf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode($('modal-pw').value));const hashHex=Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');if(hashHex===ADMIN_HASH){isAdmin=true;hideAdminModal();$('admin-toggle').classList.add('active');$('admin-toggle').innerHTML='&#x1F513; Admin';$('admin-zone').classList.add('on');updateRTStatus();renderCarts();toast('Admin mode on')}else{$('modal-error').style.display='block';$('modal-pw').value='';$('modal-pw').focus()}}
 
 // ===== RUNTIME =====
 function parseAndSetRuntime(buf){const files=parseDat(buf);if(!files['shell.html'])throw new Error('shell.html missing');if(!files['pico8_wasm.js']&&!files['pico8.js'])throw new Error('No JS runtime');runtimeFiles=files}
@@ -496,11 +501,44 @@ function renderLeaderboard() {
 
   $('lb-empty').style.display = 'none';
   $('lb-table').style.display = '';
+  // Admin column header
+  const thead = $('lb-table').querySelector('thead tr');
+  if (isAdmin) {
+    if (!thead.querySelector('.admin-del-th')) {
+      const th = document.createElement('th');
+      th.className = 'admin-del-th';
+      th.style = 'width:24px';
+      thead.appendChild(th);
+    }
+  } else {
+    const oldTh = thead.querySelector('.admin-del-th');
+    if (oldTh) oldTh.remove();
+  }
   filtered.forEach((s, i) => {
     const tr = document.createElement('tr');
     const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
     const diffColor = s.Difficulty === 'Nightmare' ? 'var(--accent)' : s.Difficulty === 'Hard' ? 'var(--yellow)' : 'var(--green)';
     tr.innerHTML = '<td class="'+rankClass+'">'+(i+1)+'</td><td>'+s.player_name+'</td><td style="color:'+diffColor+';font-size:9px">'+(s.Difficulty||'-')+'</td><td>'+s.score+'</td>';
+    if (isAdmin) {
+      const td = document.createElement('td');
+      td.style = 'text-align:center;padding:4px';
+      const btn = document.createElement('button');
+      btn.textContent = '\u2715';
+      btn.style = 'background:none;border:1px solid var(--border);color:var(--text2);font-size:10px;cursor:pointer;border-radius:3px;padding:1px 5px;font-family:inherit;transition:all .15s';
+      btn.onmouseover = () => { btn.style.borderColor='var(--accent)'; btn.style.color='var(--accent)'; };
+      btn.onmouseout = () => { btn.style.borderColor='var(--border)'; btn.style.color='var(--text2)'; };
+      btn.onclick = async () => {
+        if (!confirm('Supprimer le score de '+s.player_name+' ('+s.score+') ?')) return;
+        try {
+          await deleteScore(s.id);
+          currentLBScores = currentLBScores.filter(x => x.id !== s.id);
+          renderLeaderboard();
+          toast('Score supprimé');
+        } catch(e) { toast('Erreur: '+e.message); }
+      };
+      td.appendChild(btn);
+      tr.appendChild(td);
+    }
     $('lb-body').appendChild(tr);
   });
 }
