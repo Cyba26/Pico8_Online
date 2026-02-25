@@ -285,7 +285,18 @@ const LEADERBOARD_GAMES = ['shumpy jump', 'shumpy_jump', 'shumpyjump'];
 
 // Cartridge categories — editable, persisted in localStorage
 function loadCategories(){try{const s=localStorage.getItem('p8_categories');if(s){const p=JSON.parse(s);if(Array.isArray(p)&&p.length>0)return p}}catch(e){}return['Mes cartouches','Autres cartouches']}
-function saveCategories(){localStorage.setItem('p8_categories',JSON.stringify(CART_CATEGORIES))}
+function saveCategories(){
+  localStorage.setItem('p8_categories',JSON.stringify(CART_CATEGORIES));
+  // Sync vers Supabase en arrière-plan (cross-device)
+  try{const blob=new Blob([JSON.stringify(CART_CATEGORIES)],{type:'application/json'});sb.storage.from('pico8').upload('config/categories.json',blob,{upsert:true}).catch(()=>{})}catch(e){}
+}
+async function loadCategoriesFromSupabase(){
+  try{
+    const{data}=sb.storage.from('pico8').getPublicUrl('config/categories.json');
+    const resp=await fetch(data.publicUrl+'?t='+Date.now());
+    if(resp.ok){const cats=await resp.json();if(Array.isArray(cats)&&cats.length>0){CART_CATEGORIES=cats;localStorage.setItem('p8_categories',JSON.stringify(CART_CATEGORIES));return}}
+  }catch(e){}
+}
 let CART_CATEGORIES = loadCategories();
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -503,12 +514,13 @@ function renderCarts(){
   if(!cartridges.length){empty.style.display='block';return}
   empty.style.display='none';
 
-  // Group by category
+  // Group by category — build effective list (CART_CATEGORIES + extras from DB)
   const groups={};
   CART_CATEGORIES.forEach(cat=>{groups[cat]=[]});
-  cartridges.forEach((c,i)=>{const cat=c.category||'Autres cartouches';if(!groups[cat])groups[cat]=[];groups[cat].push({c,i})});
+  cartridges.forEach((c,i)=>{const cat=c.category||CART_CATEGORIES[CART_CATEGORIES.length-1];if(!groups[cat])groups[cat]=[];groups[cat].push({c,i})});
+  const effectiveCats=[...CART_CATEGORIES,...Object.keys(groups).filter(c=>!CART_CATEGORIES.includes(c))];
 
-  CART_CATEGORIES.forEach((cat,catIdx)=>{
+  effectiveCats.forEach((cat,catIdx)=>{
     const items=groups[cat];
     if(!items||!items.length)return;
     const section=document.createElement('div');
@@ -783,6 +795,7 @@ document.addEventListener('keydown',e=>{
     try{const buf=await downloadRemoteRuntime(remoteUrl);parseAndSetRuntime(buf);await cacheRTLocal(buf)}catch(e){console.error(e)}
   }
   $('load-status').innerHTML='<span class="spinner"></span> Loading cartridges...';
+  await loadCategoriesFromSupabase();
   try{cartridges=await fetchCartridges()}catch(e){console.error(e)}
   if(runtimeFiles){showLibrary();renderCarts()}else{showSetup();renderCarts()}
 })();
