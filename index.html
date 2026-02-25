@@ -115,6 +115,9 @@ body{
 .lb-table .rank-2{color:var(--lavender)}
 .lb-table .rank-3{color:var(--pink)}
 .lb-empty{text-align:center;padding:24px;color:var(--text2);font-size:11px}
+.lb-filter{font-size:9px;color:var(--text2);background:none;border:1px solid var(--border);padding:3px 10px;border-radius:4px;cursor:pointer;font-family:inherit;transition:all .15s}
+.lb-filter:hover{border-color:var(--blue);color:var(--blue)}
+.lb-filter.active{border-color:var(--blue);color:var(--blue);background:#29adff15}
 
 /* ===== MODALS ===== */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:400;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
@@ -203,8 +206,14 @@ body{
   <div class="lb-title" id="lb-title">&#x1F3C6; Leaderboard</div>
   <div class="lb-game-name" id="lb-game-name"></div>
   <button class="lb-play-btn" id="lb-play-btn">&#x25B6; Play</button>
+  <div style="display:flex;gap:6px;justify-content:center;margin-top:4px" id="lb-filters">
+    <button class="lb-filter active" data-diff="all">All</button>
+    <button class="lb-filter" data-diff="Easy">Easy</button>
+    <button class="lb-filter" data-diff="Hard">Hard</button>
+    <button class="lb-filter" data-diff="Nightmare">Nightmare</button>
+  </div>
   <table class="lb-table" id="lb-table">
-    <thead><tr><th>#</th><th>Player</th><th>Score</th></tr></thead>
+    <thead><tr><th>#</th><th>Player</th><th>Diff</th><th>Score</th></tr></thead>
     <tbody id="lb-body"></tbody>
   </table>
   <div class="lb-empty" id="lb-empty" style="display:none">No scores yet — be the first!</div>
@@ -228,6 +237,7 @@ body{
   <div class="modal">
     <h3>&#x1F3AE; Game Over!</h3>
     <div class="score-display" id="score-display">0</div>
+    <div style="font-size:10px;color:var(--blue);margin:-12px 0 12px" id="score-diff"></div>
     <input type="text" id="score-name" placeholder="Enter your name" maxlength="20" autocomplete="off">
     <div class="modal-btns">
       <button class="btn-cancel" id="score-skip">Skip</button>
@@ -308,10 +318,11 @@ function buildRuntimeHTML(files, cartBytes, cartName, enableScoreCapture) {
       + '  if (typeof pico8_gpio !== "undefined" && pico8_gpio) {\n'
       + '    var lo = pico8_gpio[0] || 0;\n'
       + '    var hi = pico8_gpio[1] || 0;\n'
+      + '    var diff = pico8_gpio[2] || 0;\n'
       + '    var s = (hi * 256) + lo;\n'
       + '    if (s > 0 && s !== _lastScore) {\n'
       + '      _lastScore = s;\n'
-      + '      window.parent.postMessage({ type: "p8score", score: s }, "*");\n'
+      + '      window.parent.postMessage({ type: "p8score", score: s, difficulty: diff }, "*");\n'
       + '    }\n'
       + '  }\n'
       + '}, 500);\n'
@@ -364,16 +375,19 @@ async function fetchLeaderboard(gameName) {
     .select('*')
     .eq('game_name', gameName)
     .order('score', { ascending: false })
-    .limit(50);
+    .limit(100);
   if (error) { console.error(error); return []; }
   return data || [];
 }
 
-async function submitScore(gameName, playerName, score) {
+async function submitScore(gameName, playerName, score, difficulty) {
+  const diffNames = { 1: 'Easy', 2: 'Hard', 3: 'Nightmare' };
+  const diffStr = diffNames[difficulty] || 'Easy';
   const { error } = await sb.from('leaderboard').insert({
     game_name: gameName,
     player_name: playerName,
-    score: score
+    score: score,
+    "Difficulty": diffStr
   });
   if (error) throw new Error('Submit failed: ' + error.message);
 }
@@ -387,6 +401,7 @@ let isAdmin = false;
 let remoteRuntimeExists = false;
 let currentGameCart = null; // cart object of currently playing game
 let capturedScore = 0; // last score received from iframe
+let capturedDifficulty = 0; // last difficulty received from iframe
 let currentLBCart = null; // cart for leaderboard view
 const $ = id => document.getElementById(id);
 
@@ -456,25 +471,36 @@ async function showLeaderboard(cart) {
   $('lb-body').innerHTML = '';
   $('lb-empty').style.display = 'none';
   $('lb-table').style.display = 'none';
+  currentLBFilter = 'all';
+  document.querySelectorAll('.lb-filter').forEach(b => b.classList.toggle('active', b.dataset.diff === 'all'));
 
-  // Show loading
-  $('lb-body').innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text2)"><span class="spinner"></span> Loading...</td></tr>';
+  $('lb-body').innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text2)"><span class="spinner"></span> Loading...</td></tr>';
   $('lb-table').style.display = '';
 
-  const scores = await fetchLeaderboard(cart.name);
+  currentLBScores = await fetchLeaderboard(cart.name);
+  renderLeaderboard();
+}
 
+let currentLBScores = [];
+let currentLBFilter = 'all';
+
+function renderLeaderboard() {
   $('lb-body').innerHTML = '';
-  if (!scores.length) {
+  const filtered = currentLBFilter === 'all' ? currentLBScores : currentLBScores.filter(s => s.Difficulty === currentLBFilter);
+
+  if (!filtered.length) {
     $('lb-empty').style.display = 'block';
     $('lb-table').style.display = 'none';
     return;
   }
 
+  $('lb-empty').style.display = 'none';
   $('lb-table').style.display = '';
-  scores.forEach((s, i) => {
+  filtered.forEach((s, i) => {
     const tr = document.createElement('tr');
     const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
-    tr.innerHTML = '<td class="'+rankClass+'">'+(i+1)+'</td><td>'+s.player_name+'</td><td>'+s.score+'</td>';
+    const diffColor = s.Difficulty === 'Nightmare' ? 'var(--accent)' : s.Difficulty === 'Hard' ? 'var(--yellow)' : 'var(--green)';
+    tr.innerHTML = '<td class="'+rankClass+'">'+(i+1)+'</td><td>'+s.player_name+'</td><td style="color:'+diffColor+';font-size:9px">'+(s.Difficulty||'-')+'</td><td>'+s.score+'</td>';
     $('lb-body').appendChild(tr);
   });
 }
@@ -489,12 +515,15 @@ function hideLeaderboard() {
 window.addEventListener('message', e => {
   if (e.data && e.data.type === 'p8score') {
     capturedScore = e.data.score;
+    capturedDifficulty = e.data.difficulty || 0;
   }
 });
 
 function showScoreModal(score) {
+  const diffNames = { 1: 'Easy', 2: 'Hard', 3: 'Nightmare' };
   capturedScore = score;
   $('score-display').textContent = score;
+  $('score-diff').textContent = diffNames[capturedDifficulty] || '';
   $('score-name').value = '';
   $('score-overlay').classList.add('on');
   setTimeout(() => $('score-name').focus(), 100);
@@ -510,7 +539,7 @@ async function handleScoreSubmit() {
   if (!currentGameCart || capturedScore <= 0) { hideScoreModal(); return; }
 
   try {
-    await submitScore(currentGameCart.name, name, capturedScore);
+    await submitScore(currentGameCart.name, name, capturedScore, capturedDifficulty);
     toast('Score submitted!');
     hideScoreModal();
     // Show leaderboard after submitting
@@ -528,6 +557,7 @@ async function launchCart(idx) {
   try {
     toast('Loading '+cart.name+'...');
     capturedScore = 0;
+    capturedDifficulty = 0;
     currentGameCart = hasLeaderboard(cart.name) ? cart : null;
     const resp = await fetch(cart.cart_url);
     const blob = await resp.blob();
@@ -587,6 +617,13 @@ $('modal-pw').addEventListener('keydown',e=>{if(e.key==='Enter')tryLogin()});
 $('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))hideAdminModal()});
 $('lb-back').addEventListener('click',hideLeaderboard);
 $('lb-play-btn').addEventListener('click',() => { if(currentLBCart) launchCart(currentLBCart); });
+document.querySelectorAll('.lb-filter').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentLBFilter = btn.dataset.diff;
+    document.querySelectorAll('.lb-filter').forEach(b => b.classList.toggle('active', b === btn));
+    renderLeaderboard();
+  });
+});
 $('score-skip').addEventListener('click',() => {
   hideScoreModal();
   if(currentGameCart && hasLeaderboard(currentGameCart.name)) {
