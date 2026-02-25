@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
 <title>PICO-8 Web Launcher</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -59,11 +60,14 @@ body{
 #step-library{display:none;width:100%;max-width:600px;padding:12px 16px;flex-direction:column;gap:14px}
 #step-library.on{display:flex}
 
-.lib-header{display:flex;align-items:center;justify-content:space-between}
+.lib-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .lib-header img{height:28px;image-rendering:pixelated}
-.reset-btn{font-size:9px;color:var(--text2);background:none;border:1px solid var(--border);
+.lib-header-right{display:flex;gap:6px;align-items:center}
+.reset-btn,.admin-btn{font-size:9px;color:var(--text2);background:none;border:1px solid var(--border);
   padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit;transition:all .15s}
 .reset-btn:hover{border-color:var(--accent);color:var(--accent)}
+.admin-btn:hover{border-color:var(--blue);color:var(--blue)}
+.admin-btn.active{border-color:var(--green);color:var(--green)}
 
 .lib-drop{
   border:2px dashed var(--border);border-radius:8px;padding:16px;
@@ -72,6 +76,14 @@ body{
 }
 .lib-drop:hover,.lib-drop.over{border-color:var(--blue);background:#29adff08;color:var(--text)}
 .lib-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;z-index:1}
+
+.admin-zone{display:none}
+.admin-zone.on{display:block}
+
+.loading-lib{text-align:center;padding:32px 16px;color:var(--text2);font-size:11px}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);
+  border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite;margin-bottom:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 .cart-grid{
   display:grid;
@@ -112,6 +124,30 @@ body{
 
 .empty-lib{text-align:center;padding:32px 16px;color:var(--text2);font-size:11px;line-height:1.8}
 
+/* ===== ADMIN MODAL ===== */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:400;display:none;
+  align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.on{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:24px;width:90%;max-width:320px;text-align:center}
+.modal h3{font-size:13px;margin-bottom:12px;font-family:inherit}
+.modal input[type=password]{
+  width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);font-family:inherit;font-size:12px;
+  outline:none;margin-bottom:12px;
+}
+.modal input[type=password]:focus{border-color:var(--blue)}
+.modal-btns{display:flex;gap:8px;justify-content:center}
+.modal-btns button{
+  padding:6px 16px;border-radius:6px;font-family:inherit;font-size:11px;
+  cursor:pointer;border:1px solid var(--border);transition:all .15s;
+}
+.modal-btns .btn-cancel{background:none;color:var(--text2)}
+.modal-btns .btn-cancel:hover{border-color:var(--accent);color:var(--accent)}
+.modal-btns .btn-ok{background:var(--blue);color:#fff;border-color:var(--blue)}
+.modal-btns .btn-ok:hover{opacity:.85}
+.modal .error-msg{font-size:10px;color:var(--accent);margin-bottom:8px;display:none}
+
 /* ===== GAME SCREEN ===== */
 #game{display:none;position:fixed;inset:0;background:#000;z-index:100}
 #game iframe{width:100%;height:100%;border:none}
@@ -128,27 +164,20 @@ body{
 #close-btn.on{display:flex}
 #close-btn:hover{background:var(--accent);border-color:var(--accent);color:#fff;transform:scale(1.1)}
 
-/* scrollbar */
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 
-/* toast */
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);
   background:var(--surface);border:1px solid var(--border);color:var(--text);
   padding:8px 16px;border-radius:6px;font-size:11px;font-family:inherit;
   transition:transform .3s,opacity .3s;opacity:0;z-index:300;white-space:nowrap}
 #toast.on{transform:translateX(-50%) translateY(0);opacity:1}
-
-/* saving indicator */
-.saving-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);
-  margin-left:6px;animation:pulse 1s ease-in-out infinite;vertical-align:middle}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 </head>
 <body>
 
-<!-- STEP 1: Runtime setup (shown only first time) -->
+<!-- STEP 1: Runtime setup -->
 <div id="step-setup">
   <div class="logo">
     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABZUlEQVR4Ae3dIY4CMRiA0SlBcRGynmuAISEcgGvggGRXrl25GgUHAC6B4AB4LvCvXgTB/JN05j2JaDvtR2sbAKCXStc+KJpp5G7YoVN7NvAf6DcBCAABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAAKjdsO0J47eJ1AlmP7nrv11S118mi+IGQAAIAAEgAASAABAAAkAACAABIAAEgAAQAAJAAAgAASAABIAAeFN5/iFiHKkzPs52/ZXdKffAP5f/ztwN4AlAAAgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEQNVK6zPeF5E5fIy+U5e/2R5Tx19/rVo9EzeAJwABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAABAAVStd+6CPfUTm+Nd56dSeuQE8AQgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEgAAAAKjOH1O0HaDSiFpiAAAAEHRFWHRMb2RlUE5HADIwMTEwMjIx41m2wQAAAABJRU5ErkJggg==" alt="PICO-8">
@@ -176,17 +205,40 @@ body{
 <div id="step-library">
   <div class="lib-header">
     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABZUlEQVR4Ae3dIY4CMRiA0SlBcRGynmuAISEcgGvggGRXrl25GgUHAC6B4AB4LvCvXgTB/JN05j2JaDvtR2sbAKCXStc+KJpp5G7YoVN7NvAf6DcBCAABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAAKjdsO0J47eJ1AlmP7nrv11S118mi+IGQAAIAAEgAASAABAAAkAACAABIAAEgAAQAAJAAAgAASAABIAAeFN5/iFiHKkzPs52/ZXdKffAP5f/ztwN4AlAAAgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEQNVK6zPeF5E5fIy+U5e/2R5Tx19/rVo9EzeAJwABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAABAAVStd+6CPfUTm+Nd56dSeuQE8AQgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEgAAAAKjOH1O0HaDSiFpiAAAAEHRFWHRMb2RlUE5HADIwMTEwMjIx41m2wQAAAABJRU5ErkJggg==" alt="PICO-8" style="height:28px;image-rendering:pixelated">
-    <button class="reset-btn" id="reset-rt">Change runtime</button>
+    <div class="lib-header-right">
+      <button class="admin-btn" id="admin-toggle">&#x1F512; Admin</button>
+      <button class="reset-btn" id="reset-rt">Change runtime</button>
+    </div>
   </div>
-  <div class="lib-drop" id="dz2">
-    + Drop .p8.png cartridges here — or tap to browse
-    <input type="file" id="f2" accept=".png" multiple>
+
+  <div class="admin-zone" id="admin-zone">
+    <div class="lib-drop" id="dz2">
+      + Drop .p8.png cartridges here — or tap to browse
+      <input type="file" id="f2" accept=".png" multiple>
+    </div>
   </div>
+
   <div id="cart-area">
-    <div class="empty-lib" id="empty-msg">
-      No cartridges yet.<br>Drop some .p8.png files above to get started!
+    <div class="loading-lib" id="loading-msg">
+      <div class="spinner"></div><br>Loading cartridges...
+    </div>
+    <div class="empty-lib" id="empty-msg" style="display:none">
+      No cartridges yet.
     </div>
     <div class="cart-grid" id="cart-grid"></div>
+  </div>
+</div>
+
+<!-- ADMIN MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3>&#x1F512; Admin Login</h3>
+    <div class="error-msg" id="modal-error">Wrong password</div>
+    <input type="password" id="modal-pw" placeholder="Enter admin password" autocomplete="off">
+    <div class="modal-btns">
+      <button class="btn-cancel" id="modal-cancel">Cancel</button>
+      <button class="btn-ok" id="modal-ok">Login</button>
+    </div>
   </div>
 </div>
 
@@ -196,6 +248,15 @@ body{
 <div id="toast"></div>
 
 <script>
+// ============================================================
+//  CONFIG
+// ============================================================
+const SUPABASE_URL = 'https://lniliwvcdshrenxtxtzh.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_hHGxFFQrbORNGs-e5SVlPg_VyLnpRs4';
+const ADMIN_PASSWORD = 'T8j&^NpB@KvXd3FBsP';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
 // ============================================================
 //  LZ4 BLOCK DECOMPRESSOR
 // ============================================================
@@ -266,14 +327,13 @@ function parseDat(buf) {
 }
 
 // ============================================================
-//  RAW PNG DECODER (avoids Canvas premultiplied alpha)
+//  RAW PNG DECODER
 // ============================================================
 async function extractCartData(dataURL) {
   const b64 = dataURL.split(',')[1];
   const bin = atob(b64);
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-
   const dv = new DataView(arr.buffer);
   let pos = 8, width = 0, height = 0, idatChunks = [];
   while (pos < arr.length) {
@@ -285,12 +345,10 @@ async function extractCartData(dataURL) {
     else if (type === 'IEND') break;
     pos = dataStart + len + 4;
   }
-
   const totalLen = idatChunks.reduce((a, c) => a + c.length, 0);
   const compressed = new Uint8Array(totalLen);
   let off = 0;
   for (const chunk of idatChunks) { compressed.set(chunk, off); off += chunk.length; }
-
   const ds = new DecompressionStream('deflate');
   const writer = ds.writable.getWriter();
   writer.write(compressed); writer.close();
@@ -301,7 +359,6 @@ async function extractCartData(dataURL) {
   const raw = new Uint8Array(rawTotal);
   off = 0;
   for (const c of outChunks) { raw.set(c, off); off += c.length; }
-
   const stride = width * 4;
   const pixels = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++) {
@@ -324,7 +381,6 @@ async function extractCartData(dataURL) {
       pixels[y * stride + x] = val;
     }
   }
-
   const total = width * height;
   const cart = new Uint8Array(total);
   for (let i = 0; i < total; i++) {
@@ -341,9 +397,7 @@ function buildRuntimeHTML(files, cartBytes, cartName) {
   let shell = new TextDecoder().decode(files['shell.html']);
   const useWasm = !!files['pico8_wasm.js'] && !!files['pico8_wasm.wasm'];
   const jsRuntime = useWasm ? new TextDecoder().decode(files['pico8_wasm.js']) : new TextDecoder().decode(files['pico8.js']);
-
   const cartJS = `var _cartname=[\`${cartName}\`];\nvar _cartdat=[${cartBytes.join(',')}];\nvar _cdpos=0;\n` + jsRuntime;
-
   let bootstrap = '<scr'+'ipt>\n';
   bootstrap += `window.__p8_js_blob_url=URL.createObjectURL(new Blob([${JSON.stringify(cartJS)}],{type:'application/javascript'}));\n`;
   if (useWasm) {
@@ -354,16 +408,13 @@ function buildRuntimeHTML(files, cartBytes, cartName) {
     bootstrap += `(function(){var _w='${btoa(chunks.join(''))}';var r=atob(_w),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);_w=null;window.__p8_wasm_binary=a.buffer;})();\n`;
   }
   bootstrap += '</scr'+'ipt>\n';
-
   let helper = '<scr'+'ipt>\nvar _p8b=setInterval(function(){if(typeof p8_run_cart==="function"&&typeof Module!=="undefined"&&Module.canvas){if(typeof p8_is_running==="undefined"||!p8_is_running)try{p8_run_cart()}catch(e){}clearInterval(_p8b)}},300);\n'
   + 'if("ontouchstart" in window||navigator.maxTouchPoints>0){var _p8t=setInterval(function(){if(typeof p8_touch_detected!=="undefined"){p8_touch_detected=true;clearInterval(_p8t);}},300);}\n'
   + '</scr'+'ipt>\n';
-
   shell = shell.replace('var p8_autoplay = false;', 'var p8_autoplay = true;');
   shell = shell.replace('e.src = "##js_file##";', 'e.src = window.__p8_js_blob_url;');
   shell = shell.replace('Module = {};', 'Module = {}; if(window.__p8_wasm_binary) Module.wasmBinary = window.__p8_wasm_binary;');
   shell = shell.replace(/##label_file##/g, '');
-
   const si = shell.indexOf('<script');
   shell = (si >= 0) ? shell.substring(0, si) + bootstrap + shell.substring(si) : bootstrap + shell;
   shell = shell.replace('</body>', helper + '</body>');
@@ -371,70 +422,77 @@ function buildRuntimeHTML(files, cartBytes, cartName) {
 }
 
 // ============================================================
-//  IndexedDB — Runtime + Cartridges persistence
+//  IndexedDB — Runtime local cache only
 // ============================================================
-const DB_NAME = 'p8l';
-const DB_VERSION = 2; // bumped to add cartridges store
-
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open('p8l', 2);
     req.onupgradeneeded = e => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains('d')) db.createObjectStore('d');
-      if (!db.objectStoreNames.contains('carts')) db.createObjectStore('carts', { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
-
-async function saveRT(buf) {
-  try {
-    const db = await openDB();
-    const tx = db.transaction('d', 'readwrite');
-    tx.objectStore('d').put(buf, 'rt');
-  } catch(e) {}
+async function saveRTLocal(buf) {
+  try { const db = await openDB(); db.transaction('d','readwrite').objectStore('d').put(buf,'rt'); } catch(e) {}
 }
-
-async function loadRT() {
+async function loadRTLocal() {
   try {
     const db = await openDB();
     return new Promise(res => {
-      const tx = db.transaction('d', 'readonly');
-      const req = tx.objectStore('d').get('rt');
+      const req = db.transaction('d','readonly').objectStore('d').get('rt');
       req.onsuccess = () => res(req.result || null);
       req.onerror = () => res(null);
     });
   } catch(e) { return null; }
 }
 
-async function saveCart(cart) {
-  try {
-    const db = await openDB();
-    const tx = db.transaction('carts', 'readwrite');
-    tx.objectStore('carts').put(cart);
-  } catch(e) { console.warn('Failed to save cart:', e); }
+// ============================================================
+//  SUPABASE OPERATIONS
+// ============================================================
+async function fetchCartridges() {
+  const { data, error } = await sb.from('cartridges').select('*').order('created_at', { ascending: true });
+  if (error) { console.error('Fetch error:', error); return []; }
+  return data || [];
 }
 
-async function deleteCart(id) {
-  try {
-    const db = await openDB();
-    const tx = db.transaction('carts', 'readwrite');
-    tx.objectStore('carts').delete(id);
-  } catch(e) { console.warn('Failed to delete cart:', e); }
+async function uploadCartridge(file, name, thumbDataURL) {
+  const uid = Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+  const cartPath = 'carts/' + uid + '.png';
+  const thumbPath = 'thumbs/' + uid + '.png';
+
+  const { error: cartErr } = await sb.storage.from('pico8').upload(cartPath, file, { contentType: 'image/png' });
+  if (cartErr) throw new Error('Cart upload failed: ' + cartErr.message);
+
+  let thumbUrl = null;
+  if (thumbDataURL) {
+    const thumbBlob = await fetch(thumbDataURL).then(r => r.blob());
+    const { error: thumbErr } = await sb.storage.from('pico8').upload(thumbPath, thumbBlob, { contentType: 'image/png' });
+    if (!thumbErr) {
+      const { data: td } = sb.storage.from('pico8').getPublicUrl(thumbPath);
+      thumbUrl = td.publicUrl;
+    }
+  }
+
+  const { data: cd } = sb.storage.from('pico8').getPublicUrl(cartPath);
+  const cartUrl = cd.publicUrl;
+
+  const { data, error } = await sb.from('cartridges').insert({ name, cart_url: cartUrl, thumb_url: thumbUrl }).select().single();
+  if (error) throw new Error('DB insert failed: ' + error.message);
+  return data;
 }
 
-async function loadAllCarts() {
-  try {
-    const db = await openDB();
-    return new Promise(res => {
-      const tx = db.transaction('carts', 'readonly');
-      const req = tx.objectStore('carts').getAll();
-      req.onsuccess = () => res(req.result || []);
-      req.onerror = () => res([]);
-    });
-  } catch(e) { return []; }
+async function deleteCartridge(cart) {
+  const cartPath = cart.cart_url.split('/storage/v1/object/public/pico8/')[1];
+  if (cartPath) await sb.storage.from('pico8').remove([cartPath]);
+  if (cart.thumb_url) {
+    const thumbPath = cart.thumb_url.split('/storage/v1/object/public/pico8/')[1];
+    if (thumbPath) await sb.storage.from('pico8').remove([thumbPath]);
+  }
+  const { error } = await sb.from('cartridges').delete().eq('id', cart.id);
+  if (error) throw new Error('Delete failed: ' + error.message);
 }
 
 // ============================================================
@@ -442,15 +500,53 @@ async function loadAllCarts() {
 // ============================================================
 let runtimeFiles = null;
 let cartridges = [];
+let isAdmin = false;
 const $ = id => document.getElementById(id);
 
 function log1(msg, cls) { const el=$('log1');el.classList.add('on');el.innerHTML+='<div class="'+(cls||'')+'">'+msg+'</div>';el.scrollTop=el.scrollHeight; }
 function prog(p) { $('pb1').classList.add('on'); $('pf1').style.width=p+'%'; }
 function toast(m) { const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2500); }
-
 function showLibrary() { $('step-setup').style.display='none'; $('step-library').classList.add('on'); }
 
-// ===== STEP 1 =====
+// ===== ADMIN =====
+function showAdminModal() {
+  $('modal-overlay').classList.add('on');
+  $('modal-pw').value = '';
+  $('modal-error').style.display = 'none';
+  setTimeout(() => $('modal-pw').focus(), 100);
+}
+function hideAdminModal() { $('modal-overlay').classList.remove('on'); }
+
+function toggleAdmin() {
+  if (isAdmin) {
+    isAdmin = false;
+    $('admin-toggle').classList.remove('active');
+    $('admin-toggle').innerHTML = '&#x1F512; Admin';
+    $('admin-zone').classList.remove('on');
+    renderCarts();
+    toast('Admin mode off');
+  } else {
+    showAdminModal();
+  }
+}
+
+function tryLogin() {
+  if ($('modal-pw').value === ADMIN_PASSWORD) {
+    isAdmin = true;
+    hideAdminModal();
+    $('admin-toggle').classList.add('active');
+    $('admin-toggle').innerHTML = '&#x1F513; Admin';
+    $('admin-zone').classList.add('on');
+    renderCarts();
+    toast('Admin mode on');
+  } else {
+    $('modal-error').style.display = 'block';
+    $('modal-pw').value = '';
+    $('modal-pw').focus();
+  }
+}
+
+// ===== RUNTIME =====
 function handleDat(file) {
   const reader = new FileReader();
   reader.onprogress = e => { if(e.lengthComputable) prog(e.loaded/e.total*40); };
@@ -464,63 +560,74 @@ function handleDat(file) {
       if (!files['pico8_wasm.js'] && !files['pico8.js']) throw new Error('No JS runtime');
       runtimeFiles = files;
       prog(100); log1('Runtime ready!','g');
-      await saveRT(reader.result);
+      await saveRTLocal(reader.result);
       setTimeout(showLibrary, 400);
-    } catch(e) { log1('✗ '+e.message,'r'); prog(0); }
+    } catch(e) { log1('\u2717 '+e.message,'r'); prog(0); }
   };
   reader.readAsArrayBuffer(file);
 }
 
-// ===== STEP 2 =====
+// ===== CARTRIDGES =====
 function handleCarts(fileList) {
+  if (!isAdmin) { toast('Admin mode required'); return; }
   for (const file of fileList) {
     if (!file.name.toLowerCase().match(/\.p8\.png$|\.png$/)) continue;
+    const name = file.name.replace(/\.p8\.png$/i,'').replace(/\.png$/i,'');
+    toast('Uploading ' + name + '...');
     const reader = new FileReader();
-    reader.onload = () => {
-      const id = 'cart_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-      const name = file.name.replace(/\.p8\.png$/i,'').replace(/\.png$/i,'');
-      const cartObj = { id, name, dataURL: reader.result, thumb: null };
-      cartridges.push(cartObj);
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas'); c.width=160; c.height=205;
-        const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, 0, 0);
-        cartObj.thumb = c.toDataURL();
+    reader.onload = async () => {
+      try {
+        const img = new Image();
+        const thumbPromise = new Promise(res => {
+          img.onload = () => {
+            const c = document.createElement('canvas'); c.width=160; c.height=205;
+            const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(img, 0, 0);
+            res(c.toDataURL());
+          };
+          img.onerror = () => res(null);
+          img.src = reader.result;
+        });
+        const thumbDataURL = await thumbPromise;
+        const cart = await uploadCartridge(file, name, thumbDataURL);
+        cartridges.push(cart);
         renderCarts();
-        // Save to IndexedDB
-        saveCart({ id: cartObj.id, name: cartObj.name, dataURL: cartObj.dataURL, thumb: cartObj.thumb });
-        toast('Saved: ' + cartObj.name);
-      };
-      img.src = reader.result;
-      renderCarts();
+        toast('Added: ' + name);
+      } catch(e) { toast('Error: ' + e.message); console.error(e); }
     };
     reader.readAsDataURL(file);
   }
 }
 
 async function removeCart(idx) {
+  if (!isAdmin) return;
   const cart = cartridges[idx];
-  if (cart) {
-    await deleteCart(cart.id);
+  if (!cart) return;
+  try {
+    toast('Removing ' + cart.name + '...');
+    await deleteCartridge(cart);
+    cartridges.splice(idx, 1);
+    renderCarts();
     toast('Removed: ' + cart.name);
-  }
-  cartridges.splice(idx, 1);
-  renderCarts();
+  } catch(e) { toast('Error: ' + e.message); }
 }
 
 function renderCarts() {
-  const grid=$('cart-grid'), empty=$('empty-msg');
+  const grid=$('cart-grid'), empty=$('empty-msg'), loading=$('loading-msg');
+  loading.style.display = 'none';
   grid.innerHTML = '';
   if (!cartridges.length) { empty.style.display='block'; return; }
   empty.style.display='none';
-
   cartridges.forEach((c,i) => {
     const card = document.createElement('div');
     card.className = 'cart-card';
     const ph = 'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect fill="#111" width="128" height="128"/></svg>');
-    card.innerHTML = `<div class="thumb"><img src="${c.thumb||ph}"></div><div class="cname" title="${c.name}">${c.name}</div><div class="play-overlay">▶</div><button class="delete-btn">✕</button>`;
-    card.querySelector('.delete-btn').onclick = e => { e.stopPropagation(); removeCart(i); };
+    const thumbSrc = c.thumb_url || ph;
+    card.innerHTML = '<div class="thumb"><img src="'+thumbSrc+'"></div>'
+      + '<div class="cname" title="'+c.name+'">'+c.name+'</div>'
+      + '<div class="play-overlay">\u25B6</div>'
+      + (isAdmin ? '<button class="delete-btn">\u2715</button>' : '');
+    if (isAdmin) card.querySelector('.delete-btn').onclick = e => { e.stopPropagation(); removeCart(i); };
     card.onclick = () => launchCart(i);
     grid.appendChild(card);
   });
@@ -532,14 +639,21 @@ async function launchCart(idx) {
   const cart = cartridges[idx];
   try {
     toast('Loading '+cart.name+'...');
-    const cartBytes = await extractCartData(cart.dataURL);
+    const resp = await fetch(cart.cart_url);
+    const blob = await resp.blob();
+    const dataURL = await new Promise(res => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.readAsDataURL(blob);
+    });
+    const cartBytes = await extractCartData(dataURL);
     const html = buildRuntimeHTML(runtimeFiles, cartBytes, cart.name+'.p8');
     $('gframe').src = URL.createObjectURL(new Blob([html],{type:'text/html'}));
     $('step-library').classList.remove('on');
     $('game').style.display='block';
     $('close-btn').classList.add('on');
     if (/Mobi|Android/i.test(navigator.userAgent)) try{document.documentElement.requestFullscreen()}catch(e){}
-  } catch(e) { toast('Error: '+e.message); }
+  } catch(e) { toast('Error: '+e.message); console.error(e); }
 }
 
 function exitGame() {
@@ -550,18 +664,16 @@ function exitGame() {
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
 }
 
-async function resetRuntime() {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(['d', 'carts'], 'readwrite');
+function resetRuntime() {
+  openDB().then(db => {
+    const tx = db.transaction('d','readwrite');
     tx.objectStore('d').delete('rt');
-    tx.objectStore('carts').clear();
     tx.oncomplete = () => location.reload();
-  } catch(e) { location.reload(); }
+  }).catch(() => location.reload());
 }
 
 // ===== EVENTS =====
-const dz1=$('dz1'),dz2=$('dz2');
+const dz1=$('dz1'), dz2=$('dz2');
 dz1.addEventListener('dragover',e=>{e.preventDefault();dz1.classList.add('over')});
 dz1.addEventListener('dragleave',()=>dz1.classList.remove('over'));
 dz1.addEventListener('drop',e=>{e.preventDefault();dz1.classList.remove('over');if(e.dataTransfer.files[0])handleDat(e.dataTransfer.files[0])});
@@ -572,23 +684,29 @@ dz2.addEventListener('drop',e=>{e.preventDefault();dz2.classList.remove('over');
 $('f2').addEventListener('change',e=>handleCarts(e.target.files));
 $('close-btn').addEventListener('click',exitGame);
 $('reset-rt').addEventListener('click',resetRuntime);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('game').style.display==='block')exitGame()});
+$('admin-toggle').addEventListener('click',toggleAdmin);
+$('modal-cancel').addEventListener('click',hideAdminModal);
+$('modal-ok').addEventListener('click',tryLogin);
+$('modal-pw').addEventListener('keydown',e=>{if(e.key==='Enter')tryLogin()});
+$('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))hideAdminModal()});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') {
+    if($('modal-overlay').classList.contains('on')) hideAdminModal();
+    else if($('game').style.display==='block') exitGame();
+  }
+});
 
 // ===== INIT =====
 (async()=>{
-  // Load runtime
-  const saved = await loadRT();
-  if (saved) {
-    try {
-      runtimeFiles = parseDat(saved);
-      showLibrary();
-    } catch(e) {}
-  }
-  // Load saved cartridges
-  const savedCarts = await loadAllCarts();
-  if (savedCarts.length) {
-    cartridges = savedCarts;
+  const saved = await loadRTLocal();
+  if (saved) { try { runtimeFiles = parseDat(saved); showLibrary(); } catch(e) {} }
+  try {
+    cartridges = await fetchCartridges();
     renderCarts();
+  } catch(e) {
+    $('loading-msg').style.display = 'none';
+    $('empty-msg').style.display = 'block';
+    console.error('Failed to load cartridges:', e);
   }
 })();
 </script>
