@@ -245,8 +245,9 @@ body{
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal">
     <h3>&#x1F512; Admin Login</h3>
-    <div class="error-msg" id="modal-error">Wrong password</div>
-    <input type="password" id="modal-pw" placeholder="Enter admin password" autocomplete="off">
+    <div class="error-msg" id="modal-error"></div>
+    <input type="email" id="modal-email" placeholder="Email" autocomplete="email">
+    <input type="password" id="modal-pw" placeholder="Mot de passe" autocomplete="current-password">
     <div class="modal-btns">
       <button class="btn-cancel" id="modal-cancel">Cancel</button>
       <button class="btn-ok" id="modal-ok">Login</button>
@@ -279,7 +280,6 @@ body{
 // ============================================================
 const SUPABASE_URL = 'https://lniliwvcdshrenxtxtzh.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_hHGxFFQrbORNGs-e5SVlPg_VyLnpRs4';
-const ADMIN_HASH = 'ece19f90567f7a59b2f174763de6d7bf5a6810a8f3ce016bea6e7a5c23cbdbf3';
 const RUNTIME_PATH = 'runtime/pico8.dat';
 
 // Games that have leaderboards (match by cartridge name)
@@ -502,10 +502,11 @@ function renderAdminCategories(){
 }
 
 // ===== ADMIN =====
-function showAdminModal(){$('modal-overlay').classList.add('on');$('modal-pw').value='';$('modal-error').style.display='none';setTimeout(()=>$('modal-pw').focus(),100)}
+function showAdminModal(){$('modal-overlay').classList.add('on');$('modal-email').value='';$('modal-pw').value='';$('modal-error').style.display='none';setTimeout(()=>$('modal-email').focus(),100)}
 function hideAdminModal(){$('modal-overlay').classList.remove('on')}
-function toggleAdmin(){if(isAdmin){isAdmin=false;$('admin-toggle').classList.remove('active');$('admin-toggle').innerHTML='&#x1F512; Admin';$('admin-zone').classList.remove('on');renderCarts();toast('Admin mode off')}else{showAdminModal()}}
-async function tryLogin(){const hashBuf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode($('modal-pw').value));const hashHex=Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');if(hashHex===ADMIN_HASH){isAdmin=true;hideAdminModal();$('admin-toggle').classList.add('active');$('admin-toggle').innerHTML='&#x1F513; Admin';$('admin-zone').classList.add('on');updateRTStatus();renderAdminCategories();renderCarts();toast('Admin mode on')}else{$('modal-error').style.display='block';$('modal-pw').value='';$('modal-pw').focus()}}
+function enableAdmin(){isAdmin=true;$('admin-toggle').classList.add('active');$('admin-toggle').innerHTML='&#x1F513; Admin';$('admin-zone').classList.add('on');updateRTStatus();renderAdminCategories();renderCarts();toast('Admin mode on')}
+function toggleAdmin(){if(isAdmin){sb.auth.signOut();isAdmin=false;$('admin-toggle').classList.remove('active');$('admin-toggle').innerHTML='&#x1F512; Admin';$('admin-zone').classList.remove('on');renderCarts();toast('Admin mode off')}else{showAdminModal()}}
+async function tryLogin(){const{error}=await sb.auth.signInWithPassword({email:$('modal-email').value.trim(),password:$('modal-pw').value});if(error){$('modal-error').textContent='Email ou mot de passe incorrect';$('modal-error').style.display='block';$('modal-pw').value='';$('modal-pw').focus();return}enableAdmin();hideAdminModal()}
 
 // ===== RUNTIME =====
 function parseAndSetRuntime(buf){const files=parseDat(buf);if(!files['shell.html'])throw new Error('shell.html missing');if(!files['pico8_wasm.js']&&!files['pico8.js'])throw new Error('No JS runtime');runtimeFiles=files}
@@ -757,6 +758,7 @@ $('close-btn').addEventListener('click',exitGame);
 $('admin-toggle').addEventListener('click',toggleAdmin);
 $('modal-cancel').addEventListener('click',hideAdminModal);
 $('modal-ok').addEventListener('click',tryLogin);
+$('modal-email').addEventListener('keydown',e=>{if(e.key==='Enter')$('modal-pw').focus()});
 $('modal-pw').addEventListener('keydown',e=>{if(e.key==='Enter')tryLogin()});
 $('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))hideAdminModal()});
 $('lb-back').addEventListener('click',hideLeaderboard);
@@ -810,6 +812,9 @@ document.addEventListener('keydown',e=>{
   $('load-status').innerHTML='<span class="spinner"></span> Loading cartridges...';
   await loadCategoriesFromSupabase();
   try{cartridges=await fetchCartridges()}catch(e){console.error(e)}
+  // Restore admin session if still valid
+  const{data:{session}}=await sb.auth.getSession();
+  if(session)enableAdmin();
   if(runtimeFiles){showLibrary();renderCarts()}else{showSetup();renderCarts()}
 })();
 </script>

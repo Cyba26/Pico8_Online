@@ -54,3 +54,17 @@ FOR INSERT WITH CHECK (
 -- V6: Cartridge categories
 ALTER TABLE cartridges ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'Autres cartouches';
 CREATE POLICY "Anon update" ON cartridges FOR UPDATE USING (true) WITH CHECK (true);
+
+-- V7: Restrict writes to authenticated users (Supabase Auth)
+-- Drop all anon write policies on cartridges + storage
+DROP POLICY IF EXISTS "Anon insert" ON cartridges;
+DROP POLICY IF EXISTS "Anon delete" ON cartridges;
+DROP POLICY IF EXISTS "Anon update" ON cartridges;
+DROP POLICY IF EXISTS "Anon upload" ON storage.objects;
+DROP POLICY IF EXISTS "Anon delete" ON storage.objects;
+-- Re-create as authenticated-only
+CREATE POLICY "Auth insert" ON cartridges FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Auth delete" ON cartridges FOR DELETE USING (auth.role() = 'authenticated');
+CREATE POLICY "Auth update" ON cartridges FOR UPDATE USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'pico8' AND auth.role() = 'authenticated');
+CREATE POLICY "Auth delete storage" ON storage.objects FOR DELETE USING (bucket_id = 'pico8' AND auth.role() = 'authenticated');
