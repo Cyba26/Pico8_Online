@@ -520,13 +520,15 @@ function renderCarts(){
   cartridges.forEach((c,i)=>{const cat=c.category||CART_CATEGORIES[CART_CATEGORIES.length-1];if(!groups[cat])groups[cat]=[];groups[cat].push({c,i})});
   const effectiveCats=[...CART_CATEGORIES,...Object.keys(groups).filter(c=>!CART_CATEGORIES.includes(c))];
 
-  effectiveCats.forEach((cat,catIdx)=>{
+  let sectionIdx=0;
+  effectiveCats.forEach((cat)=>{
     const items=groups[cat];
     if(!items||!items.length)return;
     const section=document.createElement('div');
     const title=document.createElement('div');title.className='cart-section-title';title.textContent=cat;
     section.appendChild(title);
-    const inner=document.createElement('div');inner.className='cart-grid-inner'+(catIdx===0?' featured':'');
+    const inner=document.createElement('div');inner.className='cart-grid-inner'+(sectionIdx===0?' featured':'');
+    sectionIdx++;
     items.forEach(({c,i})=>{
       const card=document.createElement('div');
       card.className='cart-card';
