@@ -298,16 +298,18 @@ function buildRuntimeHTML(files, cartBytes, cartName, enableScoreCapture) {
   if(useWasm){const wd=files['pico8_wasm.wasm'];const chunks=[];for(let i=0;i<wd.length;i+=32768)chunks.push(String.fromCharCode.apply(null,wd.subarray(i,Math.min(i+32768,wd.length))));bootstrap+=`(function(){var _w='${btoa(chunks.join(''))}';var r=atob(_w),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);_w=null;window.__p8_wasm_binary=a.buffer;})();\n`}
   bootstrap+='</scr'+'ipt>\n';
 
-  // Score capture: poll pico8_gpio[0] which maps to PICO-8 address 0x5f80
-  // The game writes the highscore there via poke(0x5f80, highscore)
+  // Score capture: poll pico8_gpio[0] and [1] which map to PICO-8 addresses 0x5f80-0x5f81
+  // The game writes: poke(0x5f80, score%256) poke(0x5f81, flr(score/256))
   let scoreCapture = '';
   if (enableScoreCapture) {
     scoreCapture = '<scr'+'ipt>\n'
       + 'var _lastScore = 0;\n'
       + 'var _scoreInterval = setInterval(function() {\n'
       + '  if (typeof pico8_gpio !== "undefined" && pico8_gpio) {\n'
-      + '    var s = pico8_gpio[0];\n'
-      + '    if (typeof s === "number" && s > 0 && s !== _lastScore) {\n'
+      + '    var lo = pico8_gpio[0] || 0;\n'
+      + '    var hi = pico8_gpio[1] || 0;\n'
+      + '    var s = (hi * 256) + lo;\n'
+      + '    if (s > 0 && s !== _lastScore) {\n'
       + '      _lastScore = s;\n'
       + '      window.parent.postMessage({ type: "p8score", score: s }, "*");\n'
       + '    }\n'
