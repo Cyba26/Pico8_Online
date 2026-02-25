@@ -466,29 +466,38 @@ function hasLeaderboard(cartName) {
 function renderAdminCategories(){
   const list=$('cat-list');
   list.innerHTML='';
-  CART_CATEGORIES.forEach((cat,idx)=>{
-    const item=document.createElement('div');item.className='cat-item';
+
+  function makeNameDiv(cat,onSave){
     const nameDiv=document.createElement('div');nameDiv.className='cat-name';
-    nameDiv.textContent=cat;
-    if(idx===0){const star=document.createElement('span');star.textContent='⭐';star.title='Catégorie en vedette (affichée en grand)';star.style.cssText='margin-left:4px;font-size:9px;cursor:default;opacity:.8';nameDiv.appendChild(star)}
+    nameDiv.appendChild(document.createTextNode(cat));
     nameDiv.onclick=()=>{
       const input=document.createElement('input');input.value=cat;
       nameDiv.textContent='';nameDiv.appendChild(input);input.focus();input.select();
-      const save=async()=>{
-        const n=input.value.trim();
-        if(!n||n===cat){renderAdminCategories();return}
-        const affected=cartridges.filter(c=>(c.category||CART_CATEGORIES[CART_CATEGORIES.length-1])===cat);
-        for(const c of affected){await updateCartridgeCategory(c.id,n);c.category=n}
-        CART_CATEGORIES[idx]=n;saveCategories();renderAdminCategories();renderCarts();toast('Catégorie renommée');
-      };
-      input.onblur=save;
-      input.onkeydown=e=>{if(e.key==='Enter')input.blur();if(e.key==='Escape'){renderAdminCategories()}};
+      input.onblur=onSave(input);
+      input.onkeydown=e=>{if(e.key==='Enter')input.blur();if(e.key==='Escape')renderAdminCategories()};
     };
-    if(idx>0){
+    return nameDiv;
+  }
+
+  // Catégories connues
+  CART_CATEGORIES.forEach((cat,idx)=>{
+    const item=document.createElement('div');item.className='cat-item';
+    // Icône gauche
+    if(idx===0){
+      const star=document.createElement('span');star.textContent='⭐';star.title='Catégorie en vedette';star.style.cssText='font-size:10px;cursor:default;flex-shrink:0';
+      item.appendChild(star);
+    } else {
       const pinBtn=document.createElement('button');pinBtn.className='cat-pin';pinBtn.textContent='★';pinBtn.title='Mettre en vedette';
       pinBtn.onclick=()=>{CART_CATEGORIES.splice(idx,1);CART_CATEGORIES.unshift(cat);saveCategories();renderAdminCategories();renderCarts();toast('Catégorie mise en vedette')};
       item.appendChild(pinBtn);
     }
+    const nameDiv=makeNameDiv(cat,input=>async()=>{
+      const n=input.value.trim();
+      if(!n||n===cat){renderAdminCategories();return}
+      const affected=cartridges.filter(c=>(c.category||CART_CATEGORIES[CART_CATEGORIES.length-1])===cat);
+      for(const c of affected){await updateCartridgeCategory(c.id,n);c.category=n}
+      CART_CATEGORIES[idx]=n;saveCategories();renderAdminCategories();renderCarts();toast('Catégorie renommée');
+    });
     const delBtn=document.createElement('button');delBtn.className='cat-del';delBtn.textContent='✕';
     delBtn.onclick=async()=>{
       if(CART_CATEGORIES.length<=1){toast('Il faut au moins une catégorie');return}
@@ -496,6 +505,31 @@ function renderAdminCategories(){
       const affected=cartridges.filter(c=>(c.category||CART_CATEGORIES[CART_CATEGORIES.length-1])===cat);
       for(const c of affected){await updateCartridgeCategory(c.id,fallback);c.category=fallback}
       CART_CATEGORIES.splice(idx,1);saveCategories();renderAdminCategories();renderCarts();toast('Catégorie supprimée');
+    };
+    item.appendChild(nameDiv);item.appendChild(delBtn);list.appendChild(item);
+  });
+
+  // Catégories orphelines (dans la DB mais absentes de la liste)
+  const orphans=[...new Set(cartridges.map(c=>c.category).filter(c=>c&&!CART_CATEGORIES.includes(c)))];
+  orphans.forEach(cat=>{
+    const item=document.createElement('div');item.className='cat-item';
+    const warn=document.createElement('span');warn.textContent='⚠️';warn.title='Catégorie introuvable — cliquer sur le nom pour renommer';warn.style.cssText='font-size:10px;cursor:default;flex-shrink:0';
+    item.appendChild(warn);
+    const nameDiv=makeNameDiv(cat,input=>async()=>{
+      const n=input.value.trim();
+      if(!n||n===cat){renderAdminCategories();return}
+      const affected=cartridges.filter(c=>c.category===cat);
+      for(const c of affected){await updateCartridgeCategory(c.id,n);c.category=n}
+      if(!CART_CATEGORIES.includes(n)){CART_CATEGORIES.push(n);saveCategories()}
+      renderAdminCategories();renderCarts();toast('Catégorie renommée');
+    });
+    nameDiv.style.color='var(--yellow)';
+    const delBtn=document.createElement('button');delBtn.className='cat-del';delBtn.textContent='✕';delBtn.title='Déplacer vers la dernière catégorie';
+    delBtn.onclick=async()=>{
+      const fallback=CART_CATEGORIES[CART_CATEGORIES.length-1];
+      const affected=cartridges.filter(c=>c.category===cat);
+      for(const c of affected){await updateCartridgeCategory(c.id,fallback);c.category=fallback}
+      renderAdminCategories();renderCarts();toast('Cartouches déplacées vers '+fallback);
     };
     item.appendChild(nameDiv);item.appendChild(delBtn);list.appendChild(item);
   });
