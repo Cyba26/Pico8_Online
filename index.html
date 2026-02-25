@@ -298,16 +298,15 @@ function buildRuntimeHTML(files, cartBytes, cartName, enableScoreCapture) {
   if(useWasm){const wd=files['pico8_wasm.wasm'];const chunks=[];for(let i=0;i<wd.length;i+=32768)chunks.push(String.fromCharCode.apply(null,wd.subarray(i,Math.min(i+32768,wd.length))));bootstrap+=`(function(){var _w='${btoa(chunks.join(''))}';var r=atob(_w),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);_w=null;window.__p8_wasm_binary=a.buffer;})();\n`}
   bootstrap+='</scr'+'ipt>\n';
 
-  // Score capture: intercept pico8_gpio or use a polling approach on cartdata
+  // Score capture: poll pico8_gpio[0] which maps to PICO-8 address 0x5f80
+  // The game writes the highscore there via poke(0x5f80, highscore)
   let scoreCapture = '';
   if (enableScoreCapture) {
     scoreCapture = '<scr'+'ipt>\n'
-      + '// Poll pico8_gpio[64..127] for cartdata values — PICO-8 maps cartdata to gpio 64+\n'
-      + '// dset(0, val) -> pico8_gpio[64] = val\n'
       + 'var _lastScore = 0;\n'
       + 'var _scoreInterval = setInterval(function() {\n'
       + '  if (typeof pico8_gpio !== "undefined" && pico8_gpio) {\n'
-      + '    var s = pico8_gpio[64];\n'
+      + '    var s = pico8_gpio[0];\n'
       + '    if (typeof s === "number" && s > 0 && s !== _lastScore) {\n'
       + '      _lastScore = s;\n'
       + '      window.parent.postMessage({ type: "p8score", score: s }, "*");\n'
@@ -326,12 +325,7 @@ function buildRuntimeHTML(files, cartBytes, cartName, enableScoreCapture) {
   shell=shell.replace('Module = {};','Module = {}; if(window.__p8_wasm_binary) Module.wasmBinary = window.__p8_wasm_binary;');
   shell=shell.replace(/##label_file##/g,'');
 
-  // Enable gpio for cartdata communication
-  if (enableScoreCapture) {
-    // Ensure pico8_gpio array exists
-    const gpioInit = '<scr'+'ipt>if(typeof pico8_gpio==="undefined")var pico8_gpio=new Array(128).fill(0);</scr'+'ipt>\n';
-    shell = gpioInit + shell;
-  }
+  // pico8_gpio is already defined in shell.html, no need to re-init
 
   const si=shell.indexOf('<script');
   shell=(si>=0)?shell.substring(0,si)+bootstrap+shell.substring(si):bootstrap+shell;
