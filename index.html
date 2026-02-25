@@ -86,6 +86,8 @@ body{
 .cat-name input{width:100%;background:var(--bg);border:1px solid var(--blue);color:var(--text);font-size:11px;font-family:inherit;padding:2px 6px;border-radius:3px;outline:none}
 .cat-del{font-size:10px;color:var(--text2);background:none;border:none;cursor:pointer;padding:2px 4px;line-height:1}
 .cat-del:hover{color:var(--accent)}
+.cat-pin{font-size:10px;color:var(--text2);background:none;border:none;cursor:pointer;padding:2px 4px;line-height:1}
+.cat-pin:hover{color:#ffd700}
 .cat-add-btn{width:100%;font-size:10px;color:var(--text2);background:none;border:1px dashed var(--border);padding:5px;border-radius:4px;cursor:pointer;font-family:inherit;margin-top:6px;transition:all .15s}
 .cat-add-btn:hover{border-color:var(--blue);color:var(--blue)}
 .cart-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:all .2s;position:relative}
@@ -466,20 +468,27 @@ function renderAdminCategories(){
   list.innerHTML='';
   CART_CATEGORIES.forEach((cat,idx)=>{
     const item=document.createElement('div');item.className='cat-item';
-    const nameDiv=document.createElement('div');nameDiv.className='cat-name';nameDiv.textContent=cat;
+    const nameDiv=document.createElement('div');nameDiv.className='cat-name';
+    nameDiv.textContent=cat;
+    if(idx===0){const star=document.createElement('span');star.textContent='⭐';star.title='Catégorie en vedette (affichée en grand)';star.style.cssText='margin-left:4px;font-size:9px;cursor:default;opacity:.8';nameDiv.appendChild(star)}
     nameDiv.onclick=()=>{
       const input=document.createElement('input');input.value=cat;
       nameDiv.textContent='';nameDiv.appendChild(input);input.focus();input.select();
       const save=async()=>{
         const n=input.value.trim();
-        if(!n||n===cat){nameDiv.textContent=cat;return}
+        if(!n||n===cat){renderAdminCategories();return}
         const affected=cartridges.filter(c=>(c.category||CART_CATEGORIES[CART_CATEGORIES.length-1])===cat);
         for(const c of affected){await updateCartridgeCategory(c.id,n);c.category=n}
         CART_CATEGORIES[idx]=n;saveCategories();renderAdminCategories();renderCarts();toast('Catégorie renommée');
       };
       input.onblur=save;
-      input.onkeydown=e=>{if(e.key==='Enter')input.blur();if(e.key==='Escape'){nameDiv.textContent=cat}};
+      input.onkeydown=e=>{if(e.key==='Enter')input.blur();if(e.key==='Escape'){renderAdminCategories()}};
     };
+    if(idx>0){
+      const pinBtn=document.createElement('button');pinBtn.className='cat-pin';pinBtn.textContent='★';pinBtn.title='Mettre en vedette';
+      pinBtn.onclick=()=>{CART_CATEGORIES.splice(idx,1);CART_CATEGORIES.unshift(cat);saveCategories();renderAdminCategories();renderCarts();toast('Catégorie mise en vedette')};
+      item.appendChild(pinBtn);
+    }
     const delBtn=document.createElement('button');delBtn.className='cat-del';delBtn.textContent='✕';
     delBtn.onclick=async()=>{
       if(CART_CATEGORIES.length<=1){toast('Il faut au moins une catégorie');return}
@@ -518,7 +527,9 @@ function renderCarts(){
   const groups={};
   CART_CATEGORIES.forEach(cat=>{groups[cat]=[]});
   cartridges.forEach((c,i)=>{const cat=c.category||CART_CATEGORIES[CART_CATEGORIES.length-1];if(!groups[cat])groups[cat]=[];groups[cat].push({c,i})});
-  const effectiveCats=[...CART_CATEGORIES,...Object.keys(groups).filter(c=>!CART_CATEGORIES.includes(c))];
+  const pinnedCat=CART_CATEGORIES[0];
+  const sortedRest=[...CART_CATEGORIES.slice(1),...Object.keys(groups).filter(c=>!CART_CATEGORIES.includes(c))].sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
+  const effectiveCats=pinnedCat?[pinnedCat,...sortedRest]:sortedRest;
 
   let sectionIdx=0;
   effectiveCats.forEach((cat)=>{
