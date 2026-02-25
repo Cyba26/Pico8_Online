@@ -451,10 +451,11 @@ function renderCarts(){
     const thumbSrc=c.thumb_url||ph;
     const hasLB = hasLeaderboard(c.name);
     card.innerHTML='<div class="thumb"><img src="'+thumbSrc+'"></div>'
-      +'<div class="cname" title="'+c.name+'">'+c.name+'</div>'
+      +'<div class="cname"></div>'
       +'<div class="play-overlay">\u25B6</div>'
       +(hasLB ? '<span class="trophy-icon">\u{1F3C6}</span>' : '')
       +(isAdmin?'<button class="delete-btn">\u2715</button>':'');
+    const cname = card.querySelector('.cname'); cname.textContent = c.name; cname.title = c.name;
     if(isAdmin)card.querySelector('.delete-btn').onclick=e=>{e.stopPropagation();removeCart(i)};
     card.onclick = () => {
       if (hasLB) {
@@ -518,7 +519,11 @@ function renderLeaderboard() {
     const tr = document.createElement('tr');
     const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
     const diffColor = s.Difficulty === 'Nightmare' ? 'var(--accent)' : s.Difficulty === 'Hard' ? 'var(--yellow)' : 'var(--green)';
-    tr.innerHTML = '<td class="'+rankClass+'">'+(i+1)+'</td><td>'+s.player_name+'</td><td style="color:'+diffColor+';font-size:9px">'+(s.Difficulty||'-')+'</td><td>'+s.score+'</td>';
+    const tdRank = document.createElement('td'); if (rankClass) tdRank.className = rankClass; tdRank.textContent = i + 1;
+    const tdName = document.createElement('td'); tdName.textContent = s.player_name;
+    const tdDiff = document.createElement('td'); tdDiff.style.cssText = 'color:'+diffColor+';font-size:9px'; tdDiff.textContent = s.Difficulty || '-';
+    const tdScore = document.createElement('td'); tdScore.textContent = s.score;
+    tr.appendChild(tdRank); tr.appendChild(tdName); tr.appendChild(tdDiff); tr.appendChild(tdScore);
     if (isAdmin) {
       const td = document.createElement('td');
       td.style = 'text-align:center;padding:4px';
@@ -551,6 +556,7 @@ function hideLeaderboard() {
 
 // ===== SCORE CAPTURE =====
 window.addEventListener('message', e => {
+  if (e.source !== $('gframe').contentWindow) return;
   if (e.data && e.data.type === 'p8score') {
     capturedScore = e.data.score;
     capturedDifficulty = e.data.difficulty || 0;
