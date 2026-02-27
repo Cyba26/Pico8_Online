@@ -101,6 +101,9 @@ body{
 .cart-card .delete-btn{position:absolute;top:4px;right:4px;width:18px;height:18px;border-radius:50%;background:#000a;border:1px solid #fff2;color:#fff8;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;z-index:2;line-height:1}
 .cart-card:hover .delete-btn{opacity:1}
 .cart-card .delete-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.cart-card .download-btn{position:absolute;bottom:4px;right:4px;width:18px;height:18px;border-radius:50%;background:#000a;border:1px solid #fff2;color:#fff8;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;z-index:2;line-height:1}
+.cart-card:hover .download-btn{opacity:1}
+.cart-card .download-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
 /* Trophy icon on cards with leaderboard */
 .cart-card .trophy-icon{position:absolute;top:4px;left:4px;font-size:12px;opacity:.7}
 
@@ -552,6 +555,19 @@ function handleCarts(fileList){if(!isAdmin){toast('Admin mode required');return}
 
 async function removeCart(idx){if(!isAdmin)return;const cart=cartridges[idx];if(!cart)return;try{toast('Removing '+cart.name+'...');await deleteCartridge(cart);cartridges.splice(idx,1);renderCarts();toast('Removed: '+cart.name)}catch(e){toast('Error: '+e.message)}}
 
+async function downloadCart(cart){
+  try{
+    const resp=await fetch(cart.cart_url);
+    if(!resp.ok)throw new Error('Download failed');
+    const blob=await resp.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=cart.name+'.p8.png';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }catch(e){toast('Erreur: '+e.message)}
+}
+
 function renderCarts(){
   const grid=$('cart-grid'),empty=$('empty-msg');
   grid.innerHTML='';
@@ -585,8 +601,10 @@ function renderCarts(){
         +'<div class="cname"></div>'
         +'<div class="play-overlay">\u25B6</div>'
         +(hasLB?'<span class="trophy-icon">\u{1F3C6}</span>':'')
+        +'<button class="download-btn" title="Télécharger la cartouche">\u2B73</button>'
         +(isAdmin?'<button class="delete-btn">\u2715</button>':'');
       const cname=card.querySelector('.cname');cname.textContent=c.name;cname.title=c.name;
+      card.querySelector('.download-btn').onclick=e=>{e.stopPropagation();downloadCart(c)};
       if(isAdmin){
         card.querySelector('.delete-btn').onclick=e=>{e.stopPropagation();removeCart(i)};
         const sel=document.createElement('select');sel.className='cart-cat-select';
@@ -797,12 +815,14 @@ $('modal-pw').addEventListener('keydown',e=>{if(e.key==='Enter')tryLogin()});
 $('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))hideAdminModal()});
 $('lb-back').addEventListener('click',hideLeaderboard);
 $('cat-add').addEventListener('click',()=>{
-  const newCat='Nouvelle catégorie';
+  let newCat='Nouvelle catégorie';
+  let n=2;while(CART_CATEGORIES.includes(newCat)){newCat='Nouvelle catégorie ('+n+')';n++}
   CART_CATEGORIES.push(newCat);saveCategories();
   renderAdminCategories();renderCarts();
-  // Auto-ouvre le rename de la nouvelle catégorie
+  // Auto-ouvre le rename de la nouvelle catégorie (dernier élément de CART_CATEGORIES)
   const items=$('cat-list').querySelectorAll('.cat-name');
-  if(items.length)items[items.length-1].click();
+  const newIdx=CART_CATEGORIES.length-1;
+  if(items.length>newIdx)items[newIdx].click();
 });
 $('lb-play-btn').addEventListener('click',() => { if(currentLBCart) launchCart(currentLBCart); });
 document.querySelectorAll('.lb-filter').forEach(btn => {
