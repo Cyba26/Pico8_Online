@@ -427,14 +427,20 @@ async function deleteScore(id) {
   if (error) throw new Error('Delete failed: ' + error.message);
 }
 
-async function submitScore(gameName, playerName, score, difficulty) {
+async function startGameSession(gameName) {
+  const { data, error } = await sb.rpc('start_game_session', { p_game_name: gameName });
+  if (error) throw new Error('Session failed: ' + error.message);
+  return data;
+}
+
+async function submitScore(sessionId, playerName, score, difficulty) {
   const diffNames = { 1: 'Easy', 2: 'Hard', 3: 'Nightmare' };
   const diffStr = diffNames[difficulty] || 'Easy';
-  const { error } = await sb.from('leaderboard').insert({
-    game_name: gameName,
-    player_name: playerName,
-    score: score,
-    "Difficulty": diffStr
+  const { error } = await sb.rpc('submit_game_score', {
+    p_session_id: sessionId,
+    p_player_name: playerName,
+    p_score: score,
+    p_difficulty: diffStr
   });
   if (error) throw new Error('Submit failed: ' + error.message);
 }
@@ -444,9 +450,11 @@ async function submitScore(gameName, playerName, score, difficulty) {
 // ============================================================
 let runtimeFiles = null;
 let cartridges = [];
-let isAdmin = false;
+const _AK=Symbol();const _AS={[_AK]:false};
+function checkAdmin(){return _AS[_AK]===true}
 let remoteRuntimeExists = false;
 let currentGameCart = null; // cart object of currently playing game
+let currentGameSessionId = null; // game session UUID for score validation
 let capturedScore = 0; // last score received from iframe
 let capturedDifficulty = 0; // last difficulty received from iframe
 let currentLBCart = null; // cart for leaderboard view
@@ -541,19 +549,19 @@ function renderAdminCategories(){
 // ===== ADMIN =====
 function showAdminModal(){$('modal-overlay').classList.add('on');$('modal-email').value='';$('modal-pw').value='';$('modal-error').style.display='none';setTimeout(()=>$('modal-email').focus(),100)}
 function hideAdminModal(){$('modal-overlay').classList.remove('on')}
-function enableAdmin(){isAdmin=true;$('admin-toggle').classList.add('active');$('admin-toggle').innerHTML='&#x1F513; Admin';$('admin-zone').classList.add('on');updateRTStatus();renderAdminCategories();renderCarts();toast('Admin mode on')}
-function toggleAdmin(){if(isAdmin){sb.auth.signOut();isAdmin=false;$('admin-toggle').classList.remove('active');$('admin-toggle').innerHTML='&#x1F512; Admin';$('admin-zone').classList.remove('on');renderCarts();toast('Admin mode off')}else{showAdminModal()}}
+function enableAdmin(){_AS[_AK]=true;$('admin-toggle').classList.add('active');$('admin-toggle').innerHTML='&#x1F513; Admin';$('admin-zone').classList.add('on');updateRTStatus();renderAdminCategories();renderCarts();toast('Admin mode on')}
+function toggleAdmin(){if(checkAdmin()){sb.auth.signOut();_AS[_AK]=false;$('admin-toggle').classList.remove('active');$('admin-toggle').innerHTML='&#x1F512; Admin';$('admin-zone').classList.remove('on');renderCarts();toast('Admin mode off')}else{showAdminModal()}}
 async function tryLogin(){const{error}=await sb.auth.signInWithPassword({email:$('modal-email').value.trim(),password:$('modal-pw').value});if(error){$('modal-error').textContent='Email ou mot de passe incorrect';$('modal-error').style.display='block';$('modal-pw').value='';$('modal-pw').focus();return}enableAdmin();hideAdminModal()}
 
 // ===== RUNTIME =====
 function parseAndSetRuntime(buf){const files=parseDat(buf);if(!files['shell.html'])throw new Error('shell.html missing');if(!files['pico8_wasm.js']&&!files['pico8.js'])throw new Error('No JS runtime');runtimeFiles=files}
 function handleDatLocal(file){const reader=new FileReader();reader.onprogress=e=>{if(e.lengthComputable)prog(e.loaded/e.total*40)};reader.onload=async()=>{try{prog(55);log1('Parsing runtime...','b');parseAndSetRuntime(reader.result);prog(100);log1('Runtime ready!','g');await cacheRTLocal(reader.result);setTimeout(showLibrary,400)}catch(e){log1('\u2717 '+e.message,'r');prog(0)}};reader.readAsArrayBuffer(file)}
-async function handleDatAdmin(file){if(!isAdmin)return;toast('Uploading runtime...');try{await uploadRuntime(file);remoteRuntimeExists=true;updateRTStatus();const buf=await file.arrayBuffer();parseAndSetRuntime(buf);await cacheRTLocal(buf);toast('Runtime uploaded for all users!')}catch(e){toast('Error: '+e.message);console.error(e)}}
+async function handleDatAdmin(file){if(!checkAdmin())return;toast('Uploading runtime...');try{await uploadRuntime(file);remoteRuntimeExists=true;updateRTStatus();const buf=await file.arrayBuffer();parseAndSetRuntime(buf);await cacheRTLocal(buf);toast('Runtime uploaded for all users!')}catch(e){toast('Error: '+e.message);console.error(e)}}
 
 // ===== CARTRIDGES =====
-function handleCarts(fileList){if(!isAdmin){toast('Admin mode required');return}for(const file of fileList){if(!file.name.toLowerCase().match(/\.p8\.png$|\.png$/))continue;const name=file.name.replace(/\.p8\.png$/i,'').replace(/\.png$/i,'');toast('Uploading '+name+'...');const reader=new FileReader();reader.onload=async()=>{try{const img=new Image();const thumbPromise=new Promise(res=>{img.onload=()=>{const c=document.createElement('canvas');c.width=160;c.height=205;const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.drawImage(img,0,0);res(c.toDataURL())};img.onerror=()=>res(null);img.src=reader.result});const thumbDataURL=await thumbPromise;const cart=await uploadCartridge(file,name,thumbDataURL);cartridges.push(cart);renderCarts();toast('Added: '+name)}catch(e){toast('Error: '+e.message);console.error(e)}};reader.readAsDataURL(file)}}
+function handleCarts(fileList){if(!checkAdmin()){toast('Admin mode required');return}for(const file of fileList){if(!file.name.toLowerCase().match(/\.p8\.png$|\.png$/))continue;const name=file.name.replace(/\.p8\.png$/i,'').replace(/\.png$/i,'');toast('Uploading '+name+'...');const reader=new FileReader();reader.onload=async()=>{try{const img=new Image();const thumbPromise=new Promise(res=>{img.onload=()=>{const c=document.createElement('canvas');c.width=160;c.height=205;const ctx=c.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.drawImage(img,0,0);res(c.toDataURL())};img.onerror=()=>res(null);img.src=reader.result});const thumbDataURL=await thumbPromise;const cart=await uploadCartridge(file,name,thumbDataURL);cartridges.push(cart);renderCarts();toast('Added: '+name)}catch(e){toast('Error: '+e.message);console.error(e)}};reader.readAsDataURL(file)}}
 
-async function removeCart(idx){if(!isAdmin)return;const cart=cartridges[idx];if(!cart)return;try{toast('Removing '+cart.name+'...');await deleteCartridge(cart);cartridges.splice(idx,1);renderCarts();toast('Removed: '+cart.name)}catch(e){toast('Error: '+e.message)}}
+async function removeCart(idx){if(!checkAdmin())return;const cart=cartridges[idx];if(!cart)return;try{toast('Removing '+cart.name+'...');await deleteCartridge(cart);cartridges.splice(idx,1);renderCarts();toast('Removed: '+cart.name)}catch(e){toast('Error: '+e.message)}}
 
 async function downloadCart(cart){
   try{
@@ -602,10 +610,10 @@ function renderCarts(){
         +'<div class="play-overlay">\u25B6</div>'
         +(hasLB?'<span class="trophy-icon">\u{1F3C6}</span>':'')
         +'<button class="download-btn" title="Télécharger la cartouche">\u2B73</button>'
-        +(isAdmin?'<button class="delete-btn">\u2715</button>':'');
+        +(checkAdmin()?'<button class="delete-btn">\u2715</button>':'');
       const cname=card.querySelector('.cname');cname.textContent=c.name;cname.title=c.name;
       card.querySelector('.download-btn').onclick=e=>{e.stopPropagation();downloadCart(c)};
-      if(isAdmin){
+      if(checkAdmin()){
         card.querySelector('.delete-btn').onclick=e=>{e.stopPropagation();removeCart(i)};
         const sel=document.createElement('select');sel.className='cart-cat-select';
         CART_CATEGORIES.forEach(opt=>{const o=document.createElement('option');o.value=opt;o.textContent=opt;o.selected=(c.category||'Autres cartouches')===opt;sel.appendChild(o)});
@@ -657,7 +665,7 @@ function renderLeaderboard() {
   $('lb-table').style.display = '';
   // Admin column header
   const thead = $('lb-table').querySelector('thead tr');
-  if (isAdmin) {
+  if (checkAdmin()) {
     if (!thead.querySelector('.admin-del-th')) {
       const th = document.createElement('th');
       th.className = 'admin-del-th';
@@ -677,7 +685,7 @@ function renderLeaderboard() {
     const tdDiff = document.createElement('td'); tdDiff.style.cssText = 'color:'+diffColor+';font-size:9px'; tdDiff.textContent = s.Difficulty || '-';
     const tdScore = document.createElement('td'); tdScore.textContent = s.score;
     tr.appendChild(tdRank); tr.appendChild(tdName); tr.appendChild(tdDiff); tr.appendChild(tdScore);
-    if (isAdmin) {
+    if (checkAdmin()) {
       const td = document.createElement('td');
       td.style = 'text-align:center;padding:4px';
       const btn = document.createElement('button');
@@ -733,10 +741,10 @@ function hideScoreModal() {
 async function handleScoreSubmit() {
   const name = $('score-name').value.trim();
   if (!name) { $('score-name').focus(); return; }
-  if (!currentGameCart || capturedScore <= 0) { hideScoreModal(); return; }
+  if (!currentGameCart || !currentGameSessionId || capturedScore <= 0) { hideScoreModal(); return; }
 
   try {
-    await submitScore(currentGameCart.name, name, capturedScore, capturedDifficulty);
+    await submitScore(currentGameSessionId, name, capturedScore, capturedDifficulty);
     toast('Score submitted!');
     hideScoreModal();
     // Show leaderboard after submitting
@@ -755,7 +763,10 @@ async function launchCart(idx) {
     toast('Loading '+cart.name+'...');
     capturedScore = 0;
     capturedDifficulty = 0;
-    currentGameCart = hasLeaderboard(cart.name) ? cart : null;
+    currentGameSessionId = null;
+    const isLB = hasLeaderboard(cart.name);
+    currentGameCart = isLB ? cart : null;
+    if (isLB) { currentGameSessionId = await startGameSession(cart.name); }
     const resp = await fetch(cart.cart_url);
     const blob = await resp.blob();
     const dataURL = await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(blob)});

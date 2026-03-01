@@ -68,3 +68,85 @@ CREATE POLICY "Auth delete" ON cartridges FOR DELETE USING (auth.role() = 'authe
 CREATE POLICY "Auth update" ON cartridges FOR UPDATE USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
 CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'pico8' AND auth.role() = 'authenticated');
 CREATE POLICY "Auth delete storage" ON storage.objects FOR DELETE USING (bucket_id = 'pico8' AND auth.role() = 'authenticated');
+
+-- V8: Score validation via game sessions + fix leaderboard delete policy
+-- Remove direct anon INSERT on leaderboard (scores go through RPC now)
+DROP POLICY IF EXISTS "Anon insert validated" ON leaderboard;
+-- Remove anon DELETE on leaderboard (admin only)
+DROP POLICY IF EXISTS "Anon delete" ON leaderboard;
+CREATE POLICY "Auth delete" ON leaderboard FOR DELETE USING (auth.role() = 'authenticated');
+
+-- Game sessions table (links a game launch to a score submission)
+CREATE TABLE game_sessions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  game_name TEXT NOT NULL,
+  started_at TIMESTAMPTZ DEFAULT now(),
+  used BOOLEAN DEFAULT false
+);
+ALTER TABLE game_sessions ENABLE ROW LEVEL SECURITY;
+-- No direct access for anon — only through RPC functions
+
+-- RPC: Start a game session (returns session UUID)
+CREATE OR REPLACE FUNCTION start_game_session(p_game_name TEXT)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  session_id UUID;
+BEGIN
+  INSERT INTO game_sessions (game_name)
+  VALUES (p_game_name)
+  RETURNING id INTO session_id;
+  RETURN session_id;
+END;
+$$;
+
+-- RPC: Submit a validated score
+CREATE OR REPLACE FUNCTION submit_game_score(
+  p_session_id UUID,
+  p_player_name TEXT,
+  p_score INT,
+  p_difficulty TEXT DEFAULT 'Easy'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  sess RECORD;
+BEGIN
+  -- Fetch and lock the session
+  SELECT * INTO sess
+  FROM game_sessions
+  WHERE id = p_session_id AND used = false
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Invalid or already used game session';
+  END IF;
+
+  -- Minimum play time: 5 seconds
+  IF now() - sess.started_at < INTERVAL '5 seconds' THEN
+    RAISE EXCEPTION 'Game session too short';
+  END IF;
+
+  -- Validate inputs
+  IF p_score <= 0 OR p_score >= 200000 THEN
+    RAISE EXCEPTION 'Invalid score';
+  END IF;
+  IF length(p_player_name) = 0 OR length(p_player_name) > 20 THEN
+    RAISE EXCEPTION 'Invalid player name';
+  END IF;
+  IF p_player_name LIKE '%<%' OR p_player_name LIKE '%>%' OR p_player_name LIKE '%&%' THEN
+    RAISE EXCEPTION 'Invalid characters in player name';
+  END IF;
+
+  -- Mark session as used
+  UPDATE game_sessions SET used = true WHERE id = p_session_id;
+
+  -- Insert the score
+  INSERT INTO leaderboard (game_name, player_name, score, "Difficulty")
+  VALUES (sess.game_name, p_player_name, p_score, p_difficulty);
+END;
+$$;
