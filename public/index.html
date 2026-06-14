@@ -97,6 +97,15 @@ body{
 .cart-card:hover .download-btn{opacity:1}
 .cart-card .download-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
 .cart-card .trophy-icon{position:absolute;top:4px;left:4px;font-size:12px;opacity:.7}
+.cart-card.draggable{cursor:grab}
+.cart-card.draggable:active{cursor:grabbing}
+.cart-card.draggable .drag-handle{position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:11px;color:#fff9;background:#000a;border-radius:4px;padding:0 6px;line-height:16px;opacity:0;transition:opacity .15s;z-index:2;pointer-events:none;letter-spacing:1px}
+.cart-card.draggable:hover .drag-handle{opacity:1}
+.cart-card.dragging{opacity:.4;transform:scale(.96)}
+.cart-card.drop-before{box-shadow:-3px 0 0 0 var(--green)}
+.cart-card.drop-after{box-shadow:3px 0 0 0 var(--green)}
+.cart-grid-inner.drop-empty{outline:2px dashed var(--green);outline-offset:3px;border-radius:8px;min-height:40px}
+.cart-section-title.drop-empty{color:var(--green)}
 .empty-lib{text-align:center;padding:32px 16px;color:var(--text2);font-size:11px;line-height:1.8}
 .loading-lib{text-align:center;padding:32px 16px;color:var(--text2);font-size:11px}
 #step-leaderboard{display:none;width:100%;max-width:500px;padding:12px 16px;flex-direction:column;gap:14px}
@@ -357,6 +366,12 @@ async function uploadCartridge(file,name,thumbDataURL){
 async function updateCartridgeCategory(cartId,category){
   await fetch(`/api/cartridges/${cartId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({category})});
 }
+async function reorderCartridges(){
+  // Persist the current array order + categories as positions
+  cartridges.forEach((c,i)=>{c.position=i});
+  const order=cartridges.map((c,i)=>({id:c.id,category:c.category||null,position:i}));
+  try{await fetch('/api/cartridges/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order})})}catch(e){toast('Erreur sauvegarde ordre')}
+}
 async function deleteCartridge(cart){
   await fetch(`/api/cartridges/${cart.id}`,{method:'DELETE'});
 }
@@ -464,40 +479,82 @@ async function downloadCart(cart){
   try{const resp=await fetch(cart.cart_url);if(!resp.ok)throw new Error('Download failed');const blob=await resp.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=cart.name+'.p8.png';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(a.href)}catch(e){toast('Erreur: '+e.message)}
 }
 
+// ----- Drag & drop reordering (edit mode only) -----
+let _dragSrcId=null;
+function clearDropIndicators(){
+  document.querySelectorAll('.drop-before,.drop-after').forEach(el=>el.classList.remove('drop-before','drop-after'));
+  document.querySelectorAll('.cart-grid-inner.drop-empty,.cart-section-title.drop-empty').forEach(el=>el.classList.remove('drop-empty'));
+}
+function catOf(c){return c.category||CART_CATEGORIES[CART_CATEGORIES.length-1]}
+function moveCart(srcId,targetCat,targetId,before){
+  const srcIdx=cartridges.findIndex(c=>c.id===srcId);if(srcIdx<0)return;
+  const [item]=cartridges.splice(srcIdx,1);
+  item.category=targetCat;
+  if(targetId&&targetId!==srcId){
+    const tIdx=cartridges.findIndex(c=>c.id===targetId);
+    if(tIdx<0)cartridges.push(item);else cartridges.splice(before?tIdx:tIdx+1,0,item);
+  }else{
+    let lastIdx=-1;cartridges.forEach((c,i)=>{if(catOf(c)===targetCat)lastIdx=i});
+    if(lastIdx<0)cartridges.push(item);else cartridges.splice(lastIdx+1,0,item);
+  }
+  renderCarts();reorderCartridges();
+}
+
 function renderCarts(){
   const grid=$('cart-grid'),empty=$('empty-msg');grid.innerHTML='';
-  if(!cartridges.length){empty.style.display='block';return}
+  const admin=checkAdmin();
+  if(!cartridges.length&&!admin){empty.style.display='block';return}
   empty.style.display='none';
   const groups={};CART_CATEGORIES.forEach(cat=>{groups[cat]=[]});
-  cartridges.forEach((c,i)=>{const cat=c.category||CART_CATEGORIES[CART_CATEGORIES.length-1];if(!groups[cat])groups[cat]=[];groups[cat].push({c,i})});
+  cartridges.forEach((c,i)=>{const cat=catOf(c);if(!groups[cat])groups[cat]=[];groups[cat].push({c,i})});
   const pinnedCat=CART_CATEGORIES[0];
   const sortedRest=[...CART_CATEGORIES.slice(1),...Object.keys(groups).filter(c=>!CART_CATEGORIES.includes(c))].sort((a,b)=>a.localeCompare(b,'fr',{sensitivity:'base'}));
   const effectiveCats=pinnedCat?[pinnedCat,...sortedRest]:sortedRest;
   let sectionIdx=0;
   effectiveCats.forEach(cat=>{
-    const items=groups[cat];if(!items||!items.length)return;
+    const items=groups[cat]||[];
+    if(!items.length&&!admin)return; // empty sections only shown in edit mode (drop targets)
     const section=document.createElement('div');
     const title=document.createElement('div');title.className='cart-section-title';title.textContent=cat;section.appendChild(title);
     const inner=document.createElement('div');inner.className='cart-grid-inner'+(sectionIdx===0?' featured':'');sectionIdx++;
+    if(admin){
+      // section acts as a drop target (end of category / empty category)
+      inner.addEventListener('dragover',e=>{if(_dragSrcId===null)return;e.preventDefault();e.dataTransfer.dropEffect='move';if(e.target===inner){clearDropIndicators();inner.classList.add('drop-empty');title.classList.add('drop-empty')}});
+      inner.addEventListener('drop',e=>{if(_dragSrcId===null)return;e.preventDefault();const src=_dragSrcId;clearDropIndicators();if(src)moveCart(src,cat,null,false)});
+    }
+    if(!items.length){
+      const ph=document.createElement('div');ph.style.cssText='grid-column:1/-1;text-align:center;color:var(--text2);font-size:9px;padding:10px;border:1px dashed var(--border);border-radius:6px;pointer-events:none';ph.textContent='Glisser une cartouche ici';inner.appendChild(ph);
+    }
     items.forEach(({c,i})=>{
-      const card=document.createElement('div');card.className='cart-card';
+      const card=document.createElement('div');card.className='cart-card'+(admin?' draggable':'');
       const ph='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect fill="#111" width="128" height="128"/></svg>');
       const hasLB=hasLeaderboard(c.name);
       card.innerHTML='<div class="thumb"><img src="'+(c.thumb_url||ph)+'"></div>'
         +'<div class="cname"></div>'
         +'<div class="play-overlay">▶</div>'
         +(hasLB?'<span class="trophy-icon">\u{1F3C6}</span>':'')
+        +(admin?'<span class="drag-handle">⠿</span>':'')
         +'<button class="download-btn" title="Télécharger">⭳</button>'
-        +(checkAdmin()?'<button class="delete-btn">✕</button>':'');
+        +(admin?'<button class="delete-btn">✕</button>':'');
       const cname=card.querySelector('.cname');cname.textContent=c.name;cname.title=c.name;
+      card.querySelector('.thumb img').draggable=false;
       card.querySelector('.download-btn').onclick=e=>{e.stopPropagation();downloadCart(c)};
-      if(checkAdmin()){
+      if(admin){
         card.querySelector('.delete-btn').onclick=e=>{e.stopPropagation();removeCart(i)};
-        const sel=document.createElement('select');sel.className='cart-cat-select';
+        card.querySelector('.delete-btn').draggable=false;
+        card.querySelector('.download-btn').draggable=false;
+        const sel=document.createElement('select');sel.className='cart-cat-select';sel.draggable=false;
         CART_CATEGORIES.forEach(opt=>{const o=document.createElement('option');o.value=opt;o.textContent=opt;o.selected=(c.category||'Autres cartouches')===opt;sel.appendChild(o)});
         sel.onclick=e=>e.stopPropagation();
         sel.onchange=async e=>{e.stopPropagation();const newCat=e.target.value;try{await updateCartridgeCategory(c.id,newCat);c.category=newCat;renderCarts();toast('Catégorie mise à jour')}catch(err){toast('Erreur: '+err.message)}};
         card.appendChild(sel);
+        // drag source
+        card.draggable=true;
+        card.addEventListener('dragstart',e=>{_dragSrcId=c.id;card.classList.add('dragging');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',c.id)}catch(_){}});
+        card.addEventListener('dragend',()=>{_dragSrcId=null;card.classList.remove('dragging');clearDropIndicators()});
+        // drop target
+        card.addEventListener('dragover',e=>{if(_dragSrcId===null||_dragSrcId===c.id)return;e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';const r=card.getBoundingClientRect();const before=e.clientX<r.left+r.width/2;clearDropIndicators();card.classList.add(before?'drop-before':'drop-after')});
+        card.addEventListener('drop',e=>{if(_dragSrcId===null)return;e.preventDefault();e.stopPropagation();const src=_dragSrcId;const r=card.getBoundingClientRect();const before=e.clientX<r.left+r.width/2;clearDropIndicators();if(src&&src!==c.id)moveCart(src,cat,c.id,before)});
       }
       card.onclick=()=>{if(hasLB)showLeaderboard(c);else launchCart(i)};
       inner.appendChild(card);

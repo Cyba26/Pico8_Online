@@ -32,8 +32,10 @@ async function initDB() {
       cart_path TEXT NOT NULL,
       thumb_path TEXT,
       category TEXT,
+      position INTEGER,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+    ALTER TABLE cartridges ADD COLUMN IF NOT EXISTS position INTEGER;
     CREATE TABLE IF NOT EXISTS leaderboard (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       game_name TEXT NOT NULL,
@@ -98,8 +100,30 @@ function cartRow(r: Record<string, unknown>) {
 }
 
 app.get('/api/cartridges', async (_req, res) => {
-  const { rows } = await pool.query('SELECT * FROM cartridges ORDER BY created_at ASC');
+  const { rows } = await pool.query('SELECT * FROM cartridges ORDER BY position ASC NULLS LAST, created_at ASC');
   res.json(rows.map(cartRow));
+});
+
+// Bulk reorder + recategorize (drag & drop). Body: { order: [{ id, category, position }] }
+app.post('/api/cartridges/reorder', async (req, res) => {
+  const order = (req.body?.order ?? []) as { id: string; category: string | null; position: number }[];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const item of order) {
+      await client.query(
+        'UPDATE cartridges SET position = $1, category = $2 WHERE id = $3',
+        [item.position, item.category ?? null, item.id],
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: 'Reorder failed' });
+  } finally {
+    client.release();
+  }
 });
 
 app.post('/api/cartridges', upload.fields([
@@ -111,7 +135,9 @@ app.post('/api/cartridges', upload.fields([
   const thumbFile = files['thumb']?.[0];
   if (!cartFile) { res.status(400).json({ error: 'No cartridge file' }); return; }
   const { rows } = await pool.query(
-    'INSERT INTO cartridges (name, cart_path, thumb_path, category) VALUES ($1, $2, $3, $4) RETURNING *',
+    `INSERT INTO cartridges (name, cart_path, thumb_path, category, position)
+     VALUES ($1, $2, $3, $4, COALESCE((SELECT MAX(position) + 1 FROM cartridges), 0))
+     RETURNING *`,
     [req.body.name, cartFile.path, thumbFile?.path ?? null, req.body.category ?? null],
   );
   res.json(cartRow(rows[0]));
