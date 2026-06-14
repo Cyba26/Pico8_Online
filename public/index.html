@@ -173,7 +173,7 @@ body{
   <div class="lib-header">
     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABZUlEQVR4Ae3dIY4CMRiA0SlBcRGynmuAISEcgGvggGRXrl25GgUHAC6B4AB4LvCvXgTB/JN05j2JaDvtR2sbAKCXStc+KJpp5G7YoVN7NvAf6DcBCAABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAAKjdsO0J47eJ1AlmP7nrv11S118mi+IGQAAIAAEgAASAABAAAkAACAABIAAEgAAQAAJAAAgAASAABIAAeFN5/iFiHKkzPs52/ZXdKffAP5f/ztwN4AlAAAgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEQNVK6zPeF5E5fIy+U5e/2R5Tx19/rVo9EzeAJwABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAABAAVStd+6CPfUTm+Nd56dSeuQE8AQgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEgAAAAKjOH1O0HaDSiFpiAAAAEHRFWHRMb2RlUE5HADIwMTEwMjIx41m2wQAAAABJRU5ErkJggg==" alt="PICO-8" style="height:28px;image-rendering:pixelated">
     <div class="lib-header-right">
-      <button class="admin-btn" id="admin-toggle">&#x1F512; Admin</button>
+      <button class="admin-btn" id="admin-toggle">&#x1F441;&#xFE0F; Mode lecture</button>
     </div>
   </div>
   <div class="admin-zone" id="admin-zone">
@@ -218,19 +218,6 @@ body{
     <tbody id="lb-body"></tbody>
   </table>
   <div class="lb-empty" id="lb-empty" style="display:none">No scores yet — be the first!</div>
-</div>
-
-<div class="modal-overlay" id="modal-overlay">
-  <div class="modal">
-    <h3>&#x1F512; Admin Login</h3>
-    <div class="error-msg" id="modal-error"></div>
-    <input type="email" id="modal-email" placeholder="Email" autocomplete="email">
-    <input type="password" id="modal-pw" placeholder="Mot de passe" autocomplete="current-password">
-    <div class="modal-btns">
-      <button class="btn-cancel" id="modal-cancel">Cancel</button>
-      <button class="btn-ok" id="modal-ok">Login</button>
-    </div>
-  </div>
 </div>
 
 <div class="modal-overlay" id="score-overlay">
@@ -453,19 +440,10 @@ function renderAdminCategories(){
 // ============================================================
 //  ADMIN — Auth
 // ============================================================
-function showAdminModal(){$('modal-overlay').classList.add('on');$('modal-email').value='';$('modal-pw').value='';$('modal-error').style.display='none';setTimeout(()=>$('modal-email').focus(),100)}
-function hideAdminModal(){$('modal-overlay').classList.remove('on')}
-function enableAdmin(){_AS[_AK]=true;$('admin-toggle').classList.add('active');$('admin-toggle').innerHTML='&#x1F513; Admin';$('admin-zone').classList.add('on');updateRTStatus();renderAdminCategories();renderCarts();toast('Admin mode on')}
+function enableAdmin(){_AS[_AK]=true;$('admin-toggle').classList.add('active');$('admin-toggle').innerHTML='&#x270F;&#xFE0F; Édition';$('admin-zone').classList.add('on');updateRTStatus();renderAdminCategories();renderCarts();toast('Mode édition activé')}
+function disableAdmin(){_AS[_AK]=false;$('admin-toggle').classList.remove('active');$('admin-toggle').innerHTML='&#x1F441;&#xFE0F; Mode lecture';$('admin-zone').classList.remove('on');renderCarts();toast('Mode lecture')}
 function toggleAdmin(){
-  if(checkAdmin()){
-    fetch('/api/auth/logout',{method:'POST'});
-    _AS[_AK]=false;$('admin-toggle').classList.remove('active');$('admin-toggle').innerHTML='&#x1F512; Admin';$('admin-zone').classList.remove('on');renderCarts();toast('Admin mode off')
-  }else{showAdminModal()}
-}
-async function tryLogin(){
-  const resp=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('modal-email').value.trim(),password:$('modal-pw').value})});
-  if(!resp.ok){$('modal-error').textContent='Email ou mot de passe incorrect';$('modal-error').style.display='block';$('modal-pw').value='';$('modal-pw').focus();return}
-  enableAdmin();hideAdminModal();
+  if(checkAdmin())disableAdmin();else enableAdmin();
 }
 
 // ============================================================
@@ -613,11 +591,6 @@ dz2.addEventListener('dragover',e=>{e.preventDefault();dz2.classList.add('over')
 $('f2').addEventListener('change',e=>handleCarts(e.target.files));
 $('close-btn').addEventListener('click',exitGame);
 $('admin-toggle').addEventListener('click',toggleAdmin);
-$('modal-cancel').addEventListener('click',hideAdminModal);
-$('modal-ok').addEventListener('click',tryLogin);
-$('modal-email').addEventListener('keydown',e=>{if(e.key==='Enter')$('modal-pw').focus()});
-$('modal-pw').addEventListener('keydown',e=>{if(e.key==='Enter')tryLogin()});
-$('modal-overlay').addEventListener('click',e=>{if(e.target===$('modal-overlay'))hideAdminModal()});
 $('lb-back').addEventListener('click',hideLeaderboard);
 $('cat-add').addEventListener('click',()=>{let newCat='Nouvelle catégorie';let n=2;while(CART_CATEGORIES.includes(newCat)){newCat='Nouvelle catégorie ('+n+')';n++}CART_CATEGORIES.push(newCat);saveCategories();renderAdminCategories();renderCarts();const items=$('cat-list').querySelectorAll('.cat-name');const newIdx=CART_CATEGORIES.length-1;if(items.length>newIdx)items[newIdx].click()});
 $('lb-play-btn').addEventListener('click',()=>{if(currentLBCart)launchCart(currentLBCart)});
@@ -625,7 +598,7 @@ document.querySelectorAll('.lb-filter').forEach(btn=>{btn.addEventListener('clic
 $('score-skip').addEventListener('click',()=>{hideScoreModal();if(currentGameCart&&hasLeaderboard(currentGameCart.name))showLeaderboard(currentGameCart);else $('step-library').classList.add('on');currentGameCart=null});
 $('score-submit').addEventListener('click',handleScoreSubmit);
 $('score-name').addEventListener('keydown',e=>{if(e.key==='Enter')handleScoreSubmit()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('score-overlay').classList.contains('on'))return;if($('modal-overlay').classList.contains('on'))hideAdminModal();else if($('game').style.display==='block')exitGame()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('score-overlay').classList.contains('on'))return;if($('game').style.display==='block')exitGame()}});
 
 // ============================================================
 //  INIT
@@ -643,8 +616,6 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('score-overlay
   $('load-status').innerHTML='<span class="spinner"></span> Loading cartridges...';
   await loadCategoriesFromServer();
   try{cartridges=await fetchCartridges()}catch(e){console.error(e)}
-  // Restore admin session via cookie
-  try{const data=await fetch('/api/auth/me').then(r=>r.json());if(data.admin)enableAdmin()}catch(e){}
   if(runtimeFiles){showLibrary();renderCarts()}else{showSetup();renderCarts()}
 })();
 </script>

@@ -3,3 +3,4 @@ dist/
 uploads/
 .env
 *.local
+.DS_Store
