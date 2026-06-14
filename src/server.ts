@@ -176,9 +176,14 @@ app.put('/api/categories', (req, res) => {
 
 // ── LEADERBOARD ──────────────────────────────────────────────────────────────
 app.get('/api/leaderboard/:gameName', async (req, res) => {
+  // Match on a normalized name (lowercase, alphanumerics only) so any spelling
+  // of the cartridge ("Shumpy Jump", "shumpy_jump", …) maps to the same board.
+  const norm = req.params.gameName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const { rows } = await pool.query(
-    'SELECT * FROM leaderboard WHERE game_name = $1 ORDER BY score DESC LIMIT 100',
-    [req.params.gameName],
+    `SELECT * FROM leaderboard
+     WHERE regexp_replace(lower(game_name), '[^a-z0-9]', '', 'g') = $1
+     ORDER BY score DESC LIMIT 100`,
+    [norm],
   );
   res.json(rows);
 });
