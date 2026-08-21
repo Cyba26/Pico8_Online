@@ -1,0 +1,89 @@
+{
+  "genereLe": "2026-08-20T21:31:28.828Z",
+  "groupes": [
+    {
+      "label": "Mes cartouches",
+      "dossier": "mes-cartouches",
+      "cartouches": [
+        {
+          "nom": "shumpy_jump",
+          "url": "/cartouches/mes-cartouches/01-shumpy_jump.p8.png"
+        },
+        {
+          "nom": "shoot_the_sky",
+          "url": "/cartouches/mes-cartouches/02-shoot_the_sky.p8.png"
+        },
+        {
+          "nom": "pingpungpong",
+          "url": "/cartouches/mes-cartouches/03-pingpungpong.p8.png"
+        },
+        {
+          "nom": "skying_fly",
+          "url": "/cartouches/mes-cartouches/04-skying_fly.p8.png"
+        }
+      ]
+    },
+    {
+      "label": "Autres cartouches",
+      "dossier": "autres-cartouches",
+      "cartouches": [
+        {
+          "nom": "celeste",
+          "url": "/cartouches/autres-cartouches/01-celeste.p8.png"
+        },
+        {
+          "nom": "bas-8",
+          "url": "/cartouches/autres-cartouches/02-bas-8.p8.png"
+        },
+        {
+          "nom": "birdswithguns-5",
+          "url": "/cartouches/autres-cartouches/03-birdswithguns-5.p8.png"
+        },
+        {
+          "nom": "highstakes",
+          "url": "/cartouches/autres-cartouches/04-highstakes.p8.png"
+        },
+        {
+          "nom": "xzero-3",
+          "url": "/cartouches/autres-cartouches/05-xzero-3.p8.png"
+        },
+        {
+          "nom": "warwind",
+          "url": "/cartouches/autres-cartouches/06-warwind.p8.png"
+        },
+        {
+          "nom": "hyperspace",
+          "url": "/cartouches/autres-cartouches/07-hyperspace.p8.png"
+        },
+        {
+          "nom": "mossmoss-12",
+          "url": "/cartouches/autres-cartouches/08-mossmoss-12.p8.png"
+        },
+        {
+          "nom": "Mai-chan",
+          "url": "/cartouches/autres-cartouches/09-Mai-chan.p8.png"
+        },
+        {
+          "nom": "witchcrafttd-6",
+          "url": "/cartouches/autres-cartouches/10-witchcrafttd-6.p8.png"
+        },
+        {
+          "nom": "deep-0",
+          "url": "/cartouches/autres-cartouches/11-deep-0.p8.png"
+        },
+        {
+          "nom": "picoware-20",
+          "url": "/cartouches/autres-cartouches/12-picoware-20.p8.png"
+        },
+        {
+          "nom": "bunbunsamurai-12",
+          "url": "/cartouches/autres-cartouches/13-bunbunsamurai-12.p8.png"
+        },
+        {
+          "nom": "poom_0-9",
+          "url": "/cartouches/autres-cartouches/14-poom_0-9.p8.png"
+        }
+      ]
+    }
+  ]
+}
