@@ -52,6 +52,9 @@ body{
 .lib-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .lib-header img{height:28px;image-rendering:pixelated}
 .lib-header-right{display:flex;gap:6px;align-items:center}
+.download-apk-btn{padding:6px 12px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;transition:all .15s;font-family:inherit;}
+.download-apk-btn:hover{background:var(--accent);}
+
 .reset-btn,.admin-btn{font-size:9px;color:var(--text2);background:none;border:1px solid var(--border);padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit;transition:all .15s}
 .reset-btn:hover{border-color:var(--accent);color:var(--accent)}
 .admin-btn:hover{border-color:var(--blue);color:var(--blue)}
@@ -193,6 +196,9 @@ body{
 <div id="step-library">
   <div class="lib-header">
     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAABZUlEQVR4Ae3dIY4CMRiA0SlBcRGynmuAISEcgGvggGRXrl25GgUHAC6B4AB4LvCvXgTB/JN05j2JaDvtR2sbAKCXStc+KJpp5G7YoVN7NvAf6DcBCAABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAAKjdsO0J47eJ1AlmP7nrv11S118mi+IGQAAIAAEgAASAABAAAkAACAABIAAEgAAQAAJAAAgAASAABIAAeFN5/iFiHKkzPs52/ZXdKffAP5f/ztwN4AlAAAgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEQNVK6zPeF5E5fIy+U5e/2R5Tx19/rVo9EzeAJwABIAAEgAAQAAJAAAgAASAABIAAEAACQAAIAAEgAASAABAAVStd+6CPfUTm+Nd56dSeuQE8AQgAASAABIAAEAACQAAIAAEgAASAABAAAkAACAABIAAEgAAAAKjOH1O0HaDSiFpiAAAAEHRFWHRMb2RlUE5HADIwMTEwMjIx41m2wQAAAABJRU5ErkJggg==" alt="PICO-8" style="height:28px;image-rendering:pixelated">
+    <div class="lib-header-right">
+      <a href="https://github.com/Cyba26/Pico8_Online/releases/latest/download/Pico8_Online.apk" class="download-apk-btn" download="Pico8_Online.apk">Télécharger App Android</a>
+    </div>
   </div>
   <div id="cart-area">
     <div class="loading-lib" id="loading-msg" style="display:none"><span class="spinner"></span> Loading cartridges...</div>
