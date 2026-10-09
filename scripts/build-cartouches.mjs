@@ -9,7 +9,8 @@
  * Lancer : `node scripts/build-cartouches.mjs` (fait aussi par `npm run build`).
  */
 
-import { readdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 /**
@@ -28,6 +29,15 @@ function nomAffiche(fichier) {
   return fichier.replace(/^\d+[-_]/, '').replace(/\.p8\.png$/i, '');
 }
 
+/**
+ * Empreinte courte du contenu, ajoutée à l'URL (`?v=`) : une cartouche
+ * remplacée sous le même nom change d'URL, donc ni le navigateur ni l'app
+ * Android (qui garde les cartouches pour le hors-ligne) ne servent l'ancienne.
+ */
+async function empreinte(chemin) {
+  return createHash('sha1').update(await readFile(chemin)).digest('hex').slice(0, 10);
+}
+
 async function listerDossier({ dossier, label }) {
   let fichiers;
   try {
@@ -39,13 +49,15 @@ async function listerDossier({ dossier, label }) {
 
   // Tri par nom : le préfixe numérique optionnel donne l'ordre voulu, et à
   // défaut l'alphabétique reste stable d'un build à l'autre.
-  const cartouches = fichiers
+  const tries = fichiers
     .filter((f) => f.toLowerCase().endsWith('.p8.png'))
-    .sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }))
-    .map((fichier) => ({
+    .sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
+  const cartouches = await Promise.all(
+    tries.map(async (fichier) => ({
       nom: nomAffiche(fichier),
-      url: `/cartouches/${dossier}/${encodeURIComponent(fichier)}`,
-    }));
+      url: `/cartouches/${dossier}/${encodeURIComponent(fichier)}?v=${await empreinte(join(RACINE, dossier, fichier))}`,
+    })),
+  );
 
   console.log(`  ${label} — ${cartouches.length} cartouche(s)`);
   return { label, dossier, cartouches };

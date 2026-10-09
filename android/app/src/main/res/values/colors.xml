@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#FF004D</color>
-    <color name="colorPrimaryDark">#CC003A</color>
-    <color name="colorAccent">#FF004D</color>
-    <color name="colorBackground">#0D0D1A</color>
-    <color name="colorSurface">#151528</color>
-    <color name="colorBorder">#252540</color>
-    <color name="textPrimary">#FFFFFF</color>
-    <color name="textSecondary">#7E7592</color>
-    <color name="greenAccent">#00E436</color>
-    <color name="blueAccent">#29ADFF</color>
-    <color name="yellowAccent">#FFEC27</color>
+    <!-- Fond et accent du site, repris de public/index.html. -->
+    <color name="fond">#0d0d1a</color>
+    <color name="accent">#ff004d</color>
 </resources>

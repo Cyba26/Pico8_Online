@@ -51,8 +51,10 @@ body{
 #step-library.on{display:flex}
 .lib-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .lib-header img{height:28px;image-rendering:pixelated}
-.lib-header-right{display:flex;gap:6px;align-items:center}
-.download-apk-btn{padding:6px 12px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;transition:all .15s;font-family:inherit;}
+.lib-header-right{display:flex;gap:6px;align-items:center;margin-left:auto}
+.download-apk-btn{padding:6px 12px;background:var(--blue);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;transition:all .15s;font-family:inherit;text-decoration:none}
+/* Dans l'app Android (android/), ni l'APK ni le téléchargement de cartouche n'ont de sens. */
+.in-app .download-apk-btn,.in-app .cart-card .download-btn{display:none}
 .download-apk-btn:hover{background:var(--accent);}
 
 .reset-btn,.admin-btn{font-size:9px;color:var(--text2);background:none;border:1px solid var(--border);padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit;transition:all .15s}
@@ -212,6 +214,8 @@ body{
 <div id="toast"></div>
 
 <script>
+if(/ P8App\//.test(navigator.userAgent))document.documentElement.classList.add('in-app');
+
 // ============================================================
 //  BIBLIOTHÈQUE — manifeste statique
 // ============================================================
@@ -400,7 +404,8 @@ async function launchCart(idx){
     $('gframe').src=URL.createObjectURL(new Blob([html],{type:'text/html'}));
     $('step-library').classList.remove('on');
     $('game').style.display='block';$('close-btn').classList.add('on');
-    if(/Mobi|Android/i.test(navigator.userAgent))try{document.documentElement.requestFullscreen()}catch(e){}
+    // Dans l'app, l'activité est déjà plein écran, et un WebView ne gère pas requestFullscreen.
+    if(/Mobi|Android/i.test(navigator.userAgent)&&!document.documentElement.classList.contains('in-app'))try{document.documentElement.requestFullscreen()}catch(e){}
   }catch(e){toast('Error: '+e.message)}
 }
 function exitGame(){

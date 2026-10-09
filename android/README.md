@@ -1,105 +1,45 @@
-# Pico8 Online Android App
+# App Android
 
-Une application Android qui permet de jouer aux jeux PICO-8 en ligne et hors ligne.
+Le lanceur du site dans un WebView, pour jouer **hors ligne**. Téléchargeable sur
+le site (bouton en haut à droite) : `public/releases/Pico8_Online.apk`.
 
-## Fonctionnalités
+## Comment ça marche
 
-- **Navigation WebView**: Interface native avec une WebView pour afficher l'application web Pico8_Online
-- **Cache local**: Tous les fichiers (pico8.dat, cartouches, assets) sont téléchargés et stockés localement
-- **Mode hors ligne**: Fonctionne sans connexion Internet une fois les fichiers téléchargés
-- **Synchronisation automatique**: Mise à jour du contenu quand la connexion revient
-- **Détection de connectivité**: Basculer automatiquement entre le mode en ligne et hors ligne
+- Le site (`public/index.html`, `cartouches.json`, `cartouches/`) est **embarqué
+  dans l'APK au build** : rien n'est dupliqué dans git, la source reste `public/`.
+- Il est servi depuis une origine locale fixe (`appassets.androidplatform.net`) :
+  le `pico8.dat` déposé une fois reste dans l'IndexedDB de l'app, réseau ou pas.
+- `SiteStore` : la page et la liste des cartouches sont servies depuis la
+  dernière copie connue puis rafraîchies en arrière-plan — une cartouche
+  ajoutée au site apparaît dans l'app au lancement suivant, sans republier
+  l'APK. Les cartouches sont gardées par empreinte (`?v=`, voir
+  `scripts/build-cartouches.mjs`).
+- Au lancement, l'app lit `releases/version.json` sur le site et propose
+  (une fois par version) de télécharger le nouvel APK.
 
-## Structure du projet
+Le runtime PICO-8 n'est **pas** dans l'APK (fichier sous licence Lexaloffle) :
+il faut déposer son `pico8.dat` au premier lancement, comme sur le site.
 
-```
-Pico8_Android/
-├── app/
-│   ├── src/main/
-│   │   ├── java/com/pico8/online/
-│   │   │   ├── CacheEntity.kt          # Entité Room pour le cache
-│   │   │   ├── CacheDao.kt             # DAO Room
-│   │   │   ├── CacheDatabase.kt        # Base de données Room
-│   │   │   ├── CacheManager.kt         # Gestionnaire de cache
-│   │   │   ├── Config.kt                # Configuration
-│   │   │   ├── ConnectivityReceiver.kt # Détection des changements de réseau
-│   │   │   ├── CustomWebViewClient.kt  # Client WebView personnalisé
-│   │   │   ├── MainActivity.kt          # Activité principale
-│   │   │   ├── Pico8App.kt             # Application
-│   │   │   ├── SyncService.kt          # Service de synchronisation
-│   │   │   └── CacheConverters.kt      # Convertisseurs Room
-│   │   ├── res/
-│   │   │   ├── layout/
-│   │   │   │   └── activity_main.xml
-│   │   │   ├── values/
-│   │   │   │   ├── colors.xml
-│   │   │   │   ├── dimens.xml
-│   │   │   │   ├── strings.xml
-│   │   │   │   └── styles.xml
-│   │   │   └── ...
-│   │   └── assets/
-│   │       ├── index.html
-│   │       ├── cartouches.json
-│   │       └── cartouches/
-│   └── build.gradle
-├── build.gradle
-├── settings.gradle
-└── README.md
-```
+## Publier une version
 
-## Configuration
+Ne republier que si le code natif (`android/`) a changé — le contenu du site
+se met à jour tout seul.
 
-### URL de base
+1. Monter `appVersionCode` (et `appVersionName`) dans `app/build.gradle.kts`.
+2. `npm run build` à la racine (régénère `cartouches.json`).
+3. `cd android && ./gradlew publishApk` → `public/releases/Pico8_Online.apk`
+   + `version.json`.
+4. Committer, pousser : Vercel déploie, les apps installées proposent la mise à jour.
 
-L'application utilise par défaut: `https://cyba.github.io/Pico8_Online`
+## Signature
 
-Vous pouvez modifier l'URL dans:
-- `Config.kt` (constante `DEFAULT_BASE_URL`)
-- `CacheManager.kt` (méthode `getBaseUrl()`)
+La clé est **hors git** : `android/release.jks` + `android/keystore.properties`
+(`storeFile`, `storePassword`, `keyAlias`, `keyPassword`). **La sauvegarder** :
+sans elle, une nouvelle version ne s'installe plus par-dessus l'ancienne (il
+faudrait désinstaller, et perdre le `pico8.dat` déposé).
 
-### Développement local
+## Outillage
 
-Pour tester avec un serveur local:
-1. Lancer le serveur de développement: `npm run dev` dans Pico8_Online
-2. Modifier `getBaseUrl()` pour retourner `http://10.0.2.2:5173` (Android Emulator)
-3. Autoriser le cleartext traffic dans `network_security_config.xml`
-
-## Build
-
-```bash
-# Clone le projet
-cd Pico8_Android
-
-# Build avec Gradle
-./gradlew assembleDebug
-
-# Ou build & installer sur un appareil
-./gradlew installDebug
-```
-
-## Architecture
-
-1. **WebView avec cache**: Utilisation d'un `CustomWebViewClient` qui intercepte les requêtes et sert le contenu depuis le cache local
-2. **Synchronisation**: Service en arrière-plan qui met à jour le cache quand la connexion revient
-3. **Room Database**: Stockage des fichiers cachés avec chiffrement Base64
-4. **OkHttp**: Téléchargement des fichiers depuis Internet
-5. **BroadcastReceiver**: Détection des changements de connectivité
-
-## Dépendances
-
-- AndroidX (AppCompat, Room, Lifecycle)
-- Kotlin Coroutines
-- OkHttp 3
-
-## Prochaines améliorations
-
-- [ ] Gestion plus intelligente de la synchronisation (delta updates)
-- [ ] Notification quand de nouveaux jeux sont disponibles
-- [ ] Gestion des erreurs plus robuste
-- [ ] Interface utilisateur plus aboutie
-- [ ] Support des téléchargements de cartouches depuis l'appareil
-- [ ] Configuration utilisateur (choix de l'URL, etc.)
-
-## Licence
-
-Ce projet est basé sur Pico8_Online: https://github.com/cyba/Pico8_Online
+JDK 17 et SDK Android (platform 35, build-tools 35) ; `local.properties`
+indique `sdk.dir`. Sur ce Mac : `brew install openjdk@17
+android-commandlinetools`, `JAVA_HOME=/opt/homebrew/opt/openjdk@17`.

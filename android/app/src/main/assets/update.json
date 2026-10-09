@@ -1,7 +1,0 @@
-{
-  "version": "1.0",
-  "versionCode": 1,
-  "apkUrl": "https://github.com/cyba/Pico8_Android/releases/download/v1.0/app-release.apk",
-  "changelog": "Première version de Pico8 Online pour Android",
-  "isMandatory": false
-}
