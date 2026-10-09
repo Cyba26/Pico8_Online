@@ -1,0 +1,6 @@
+This file will be downloaded automatically by Gradle wrapper setup.
+For now, you can run the following command to set up Gradle wrapper:
+
+gradle wrapper --gradle-version 8.3
+
+Or download it manually from: https://services.gradle.org/distributions/gradle-8.3-bin.zip

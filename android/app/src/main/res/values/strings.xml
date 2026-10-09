@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">PICO-8 Online</string>
+    <string name="loading">Chargement...</string>
+    <string name="no_connection">Pas de connexion Internet</string>
+    <string name="offline_mode">Mode hors ligne</string>
+    <string name="sync_in_progress">Synchronisation en cours...</string>
+    <string name="sync_complete">Synchronisation terminée</string>
+    <string name="settings">Paramètres</string>
+    <string name="about">À propos</string>
+    <string name="exit_confirm">Voulez-vous quitter ?</string>
+    <string name="clear_cache">Effacer le cache</string>
+    <string name="clear_cache_confirm">Effacer tout le cache local ?</string>
+    <string name="update_available">Mise à jour disponible</string>
+    <string name="download_update">Télécharger la mise à jour</string>
+    <string name="update_downloading">Téléchargement en cours...</string>
+    <string name="update_downloaded">Téléchargement terminé</string>
+    <string name="install_permission_required">Permission requise pour installer la mise à jour</string>
+    <string name="install_permission_denied">Permission refusée. Impossible dinstaller les mises à jour.</string>
+</resources>

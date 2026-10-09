@@ -1,0 +1,39 @@
+# Android
+*.iml
+.gradle/
+build/
+dist/
+*.apk
+*.aab
+local.properties
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Kotlin
+*.kotlin_module
+
+# Assets - Exclure les cartouches (trop gros pour git)
+app/src/main/assets/cartouches/
+!app/src/main/assets/cartouches/README.md
+
+# Fichiers de développement
+.env
+.env.local
+
+# Cache
+*.cache
+*.log
+
+# Test
+/coverage/
+
+# Temporary files
+*.tmp
+*.temp

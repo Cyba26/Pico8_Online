@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Fichiers APK dans le dossier Downloads -->
+    <external-path
+        name="external_files"
+        path="Download/" />
+    
+    <!-- Fichiers APK dans le dossier de cache de l'app -->
+    <external-cache-path
+        name="external_cache"
+        path="." />
+    
+    <!-- Fichiers dans le stockage externe -->
+    <external-media-path
+        name="external_media"
+        path="." />
+    
+    <!-- Fichiers temporaires -->
+    <cache-path
+        name="cache"
+        path="." />
+    
+    <!-- Fichiers dans le dossier files de l'app -->
+    <files-path
+        name="files"
+        path="." />
+
+</paths>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Logo PICO-8 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6,2h12v20H6z" />
+    <path
+        android:fillColor="#0D0D1A"
+        android:pathData="M8,4v16h8V4H8z" />
+</vector>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    
+    <!-- Pour la production: utiliser uniquement des connexions HTTPS -->
+    <domain-config>
+        <domain includeSubdomains="true">cyba.github.io</domain>
+        <domain includeSubdomains="true">pico8-online.vercel.app</domain>
+        <domain includeSubdomains="true">*.vercel.app</domain>
+    </domain-config>
+    
+    <!-- Pour le développement local (Android Emulator) -->
+    <domain-config>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+    
+    <!-- Autoriser le traffic cleartext pour les URL de développement -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Désactiver la validation du certificat pour le développement
+         (À enlever pour la production!) -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
