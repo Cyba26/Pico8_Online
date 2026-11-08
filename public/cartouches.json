@@ -1,5 +1,5 @@
 {
-  "genereLe": "2026-10-09T16:55:30.657Z",
+  "genereLe": "2026-11-08T11:42:43.657Z",
   "groupes": [
     {
       "label": "Mes cartouches",
@@ -82,6 +82,10 @@
         {
           "nom": "poom_0-9",
           "url": "/cartouches/autres-cartouches/14-poom_0-9.p8.png?v=c1794a0d79"
+        },
+        {
+          "nom": "manbomber",
+          "url": "/cartouches/autres-cartouches/15-manbomber.p8.png?v=f1322a4433"
         }
       ]
     }
